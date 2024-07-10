@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# FastFlow
+ff/
+
+# CMake
+build/
