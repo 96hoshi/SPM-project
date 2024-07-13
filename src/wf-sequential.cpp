@@ -6,6 +6,7 @@
 #include <thread>
 #include <random>
 #include <cassert>
+#include <chrono>
 
 #include "hpc_helpers.hpp"
 //#include "utils.hpp"
@@ -79,11 +80,22 @@ int main(int argc, char *argv[]) {
         M[i * N + i] = static_cast<double>(i + 1) / N;
     }
 
-	TIMERSTART(wavefront);
-	wavefront(M, N); 
-    TIMERSTOP(wavefront);
+	// TODO: use utils macro
+	#ifdef BENCHMARK
+		auto a = std::chrono::system_clock::now();
+		wavefront(M, N);
+		auto b = std::chrono::system_clock::now();
+		std::chrono::duration<double> delta = b-a;
+		std::cout << std::fixed << std::setprecision(6) << delta.count() << std::endl;
+	#else
+		wavefront(M, N); 
+		printMatrix(M, N);
+	#endif
 
-	printMatrix(M, N);
+	// TIMERSTART(wavefront);
+	// wavefront(M, N); 
+	// TIMERSTOP(wavefront);
+	// printMatrix(M, N);
 
     return 0;
 }
