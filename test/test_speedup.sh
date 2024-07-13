@@ -1,13 +1,22 @@
 #!/bin/bash
 
-# Check if matrix sizes are provided
-if [ $# -lt 1 ]; then
-    echo "Usage: $0 <size1> [<size2> ...]"
+# Check if arguments are provided correctly
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 <test_case_number> <num_threads>"
     exit 1
 fi
 
+# Extract inputs
+test_case=$1
+num_threads=$2
+
+# Define matrix sizes for each test case 
+declare -a case1_sizes=(10 50 100)
+declare -a case2_sizes=(200 500 1000)
+declare -a case3_sizes=(2000 5000 10000)
+
 # Compilation
-#mkdir ../build 
+#mkdir ../build
 cd ../build/
 cmake -DENABLE_BENCHMARK=ON .. 
 make -j 8 
@@ -16,16 +25,17 @@ make -j 8
 run_programs() {
     local size=$1
 
+    echo "num_threads: $num_threads"
     # Run the sequential version and get the time
     SEQ_TIME=$(../build/wf_sequential $size)
     echo "Sequential:  $SEQ_TIME seconds"
 
-    # Run the FastFlow parallel version and get the time
-    PAR_TIME=$(../build/wf_parallel $size)
+    # Run the FastFlow parallel version with specified number of threads
+    PAR_TIME=$(../build/wf_parallel $size $num_threads)
     echo "FF Parallel: $PAR_TIME seconds"
 
-    # Run the FastFlow farm version and get the time
-    FARM_TIME=$(../build/wf_farm $size 4)
+    # Run the FastFlow farm version with specified number of threads
+    FARM_TIME=$(../build/wf_farm $size $num_threads)
     echo "FF Farm:     $FARM_TIME seconds"
 
     # Calculate the speedup
@@ -37,9 +47,25 @@ run_programs() {
     echo
 }
 
-# Loop through each matrix size provided as argument
-for size in "$@"; do
-    echo "----------------------------------------"
-    echo "Testing for matrix size: $size"
+# Determine which test case to run
+case $test_case in
+    1)
+        echo "Running test case 1"
+        sizes=("${case1_sizes[@]}")
+        ;;
+    2)
+        echo "Running test case 2"
+        sizes=("${case2_sizes[@]}")
+        ;;
+    *)
+        echo "Invalid test case number."
+        exit 1
+        ;;
+esac
+
+# Loop through sizes for the selected test case
+for size in "${sizes[@]}"; do
+    echo "Matrix size: $size"
     run_programs $size
+    echo "----------------------------------------"
 done
