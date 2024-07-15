@@ -2,93 +2,164 @@
 #include <vector>
 #include <cstdint>
 #include <chrono>
+#include <cmath>
 #include <ff/ff.hpp>
-#include <ff/parallel_for.hpp>
+#include <ff/farm.hpp>
 
 #include "hpc_helpers.hpp"
+
 ///#include "utils.hpp"
 
 using namespace ff;
 
+//TODO: use proper type
+struct Task {
+    uint64_t k;
+    uint64_t m;
+    int task_size; 
+};
 
-// Function to perform cube root of dot product
-double dotProduct(const std::vector<double>& v1, const std::vector<double>& v2) {
-    double result = 0.0;
-    for(size_t i = 0; i < v1.size(); ++i) {
-        result += v1[i] * v2[i];
-    }
-    return std::cbrt(result);;
-}
 
 // Print the matrix
-void printMatrix(const std::vector<std::vector<double>>& M) {
-    for(size_t i = 0; i < M.size(); ++i) {
-        for(size_t j = 0; j < M.size(); ++j) {
-            std::printf("%f ", M[i][j]);
+void printMatrix(const std::vector<double>& M, const uint64_t& N) {
+    for(size_t i = 0; i < N; ++i) {
+        for(size_t j = 0; j < N; ++j) {
+            std::printf("%f ", M[i * N + j]);
         }
         std::printf("\n");
     }
 }
 
-// Worker class to process elements of a diagonal
-struct Worker: ff_node_t<std::pair<int, int>> {
-    std::vector<std::vector<double>>& M;
-    Worker(std::vector<std::vector<double>>& M): M(M) { }
+// Emitter class to distribute tasks
+struct Emitter: ff_monode_t<Task, Task> {
+    uint64_t N;         // Number of elements in the matrix (NxN)
+    uint64_t k;         // Current diagonal index
+    int nw;             // Number of workers
+    int chunk_size;     // Number of elements in the diagonal for each worker
+    int feedback_count; // Counter to track feedback from workers
 
-    std::pair<int, int>* svc(std::pair<int, int>* task) {
-        int m = task->first;
-        int k = task->second;
+    Emitter(uint64_t N, int nw) : N(N), nw(nw), k(1), feedback_count(0) {
+        // Same chunk size to all workers for static scheduling
+        chunk_size = static_cast<int>(N / nw);
+    }
 
-        std::vector<double> v_m(k), v_mk(k);
-        for(int j = 0; j < k; ++j) {
-            v_m[j] = M[m][m + j];
-            v_mk[j] = M[m + k - j][m + k];
+    Task* svc(Task* task) {
+        // Send tasks to workers
+        if (k < N) {
+            for (uint64_t i = 0; i < (N - k); i += chunk_size) {
+                int chunk = std::min(chunk_size, static_cast<int>(N - k - i + 1));
+                ff_send_out(new Task{k, i, chunk});
+                //printf("Emitter: sent task (%ld, %ld, %d)\n", k, i, chunk);
+                }
+            //printf("Emitter: sent all tasks for diagonal %ld\n", k);
+            ++k;
+            return GO_ON; // Continue processing
+        } else {
+            //printf("Emitter: sent EOS\n");
+            return EOS;
         }
-        M[m][m + k] = dotProduct(v_m, v_mk);
+    }
 
-        return task;
+    void svc_end() {
+        // Do nothing
+        //printf("Emitter: END\n");
+    }
+
+    void feedback(Task* finshed_task) {
+        // Receive feedback from workers
+        if (feedback_count < N) {
+            // Continue processing
+            //printf("FB: received feedback\n");
+            feedback_count += finshed_task->task_size;
+            delete finshed_task;
+        } else {
+            // All feedback received
+            //printf("FB: received all feedback %d\n", feedback_count);
+            feedback_count = 0;
+            delete finshed_task;
+            // Continue processing
+            ff_send_out(nullptr);
+        }
     }
 };
 
-// Emitter class to distribute tasks
-struct Emitter: ff_monode_t<std::pair<int, int>> {
-    int N;
-    int k;
+// Worker class to perform tasks
+struct Worker: ff_node_t<Task, Task> {
+    std::vector<double>& M;
+    uint64_t N;
 
-    Emitter(int N): N(N), k(1) {}
+    Worker(std::vector<double>& M, uint64_t N) : M(M), N(N) {}
 
-    std::pair<int, int>* svc(std::pair<int, int>*) {
-        if (k >= N) return EOS; // End of stream
-        for (int m = 0; m < N - k; ++m) {
-            ff_send_out(new std::pair<int, int>(m, k));
+    Task* svc(Task* task) {
+        uint64_t m = task->m;                    // Row index
+        const uint64_t k = task->k;              // Diagonal index
+        const int task_size = task->task_size;   // Number of elements in the diagonal
+
+        // Perform the computation for the matrix diagonal element
+        std::vector<double> v_m(k), v_mk(k);
+        //printf("Worker: received task (%ld, %ld, %d)\n", k, m, task_size);
+        
+        int end = std::min(N - k, m + task_size);
+
+        // Compute the diagonal for the given task length
+        for (; m < end; ++m) {
+            auto mk = m + k;
+            auto i = m * N;
+
+            for (uint64_t j = 0; j < k; ++j) {
+                v_m[j] = M[i + (m + j)];        // M[m][m+j]
+                v_mk[j] = M[(mk - j) * N + mk]; // M[m+k-j][m+k]
+            }
+            // Compute the cube root of the dot product
+            // TODO: compare function call with inline code
+            M[i + mk] = dotProduct(v_m, v_mk); // M[m][m+k]
         }
-        k++;
+
+        // Send feedback to the emitter to indicate completion
+        ff_send_out(task);
+        delete task;
+
         return GO_ON;
+    }
+
+    // Function to perform cube root of dot product
+    inline double dotProduct(const std::vector<double>& v1, const std::vector<double>& v2) {
+        double result = 0.0;
+        for(size_t i = 0; i < v1.size(); ++i) {
+            result += v1[i] * v2[i];
+        }
+        return std::cbrt(result);
     }
 };
 
 // Function to perform wavefront
-void farm_wavefront(std::vector<std::vector<double>>& M, const uint64_t& N, const int nw) {
+int farm_wavefront(std::vector<double>& M, const uint64_t& N, const int nw) {
     std::vector<std::unique_ptr<ff_node>> workers;
     
     // Create workers
     for(int i = 0; i < nw; ++i) {
-        workers.push_back(make_unique<Worker>(M));
+        workers.push_back(make_unique<Worker>(M, N));
     }
 
     // Create farm
     ff_Farm<std::pair<int, int>> farm(move(workers));
-    Emitter emitter(N);
+    Emitter emitter(N, nw);
     farm.add_emitter(emitter);
+    farm.wrap_around();
+    // farm.set_scheduling_ondemand(); 
+
 
     if (farm.run_and_wait_end() < 0) {
         error("running farm");
+        return -1;
     }
+    return 0;
 }
 
+
 int main(int argc, char *argv[]) {
-    uint64_t N = 10;    // default size of the matrix (NxN)
-    int nw = 4;         // default number of workers
+    uint64_t N = 516;    // default size of the matrix (NxN)
+    uint64_t nw = 4;     // default number of workers
 
     if (argc != 2 && argc != 3) {
 		std::printf("use: %s N nw\n", argv[0]);
@@ -101,30 +172,41 @@ int main(int argc, char *argv[]) {
         nw = std::stoi(argv[2]);
 	}
 
+    // Check the size of the matrix
+    if (N < 1) {
+        std::printf("N should be greater than 0\n");
+        return -1;
+    }
+    // Check the number of workers
+    if (nw < 1) {
+        std::printf("number of workers should be greater than 0\n");
+        return -1;
+    }
+
     // Allocate the matrix 
-    std::vector<std::vector<double>> M(N, std::vector<double>(N, 0.0));
+    std::vector<double> M(N * N, 0.0);
     for(uint64_t i = 0; i < N; ++i) {
-        M[i][i] = static_cast<double>(i + 1) / N;
+        M[i * N + i ] = static_cast<double>(i + 1) / N;
     }
 
     // TODO: use utils macro
     #ifdef BENCHMARK
         auto a = std::chrono::system_clock::now();
-        farm_wavefront(M, N, nw);
+        farm_wavefront(M, N, nw) < 0;
         auto b = std::chrono::system_clock::now();
         std::chrono::duration<double> delta = b-a;
         std::cout << std::fixed << std::setprecision(6) << delta.count() << std::endl;
     #else
-        farm_wavefront(M, N, nw);
-        printMatrix(M);
+        if(farm_wavefront(M, N, nw) < 0) {
+            error("running farm_wavefront");
+            return -1;
+        }
+        printMatrix(M, N);
     #endif
 
     // TIMERSTART(faram_wavefront);
     // farm_wavefront(M, N, nw);
     // TIMERSTOP(faram_wavefront);
-
-    // // Print the matrix
-    // printMatrix(M);
 
     return 0;
 }

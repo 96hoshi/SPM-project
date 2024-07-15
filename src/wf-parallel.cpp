@@ -54,15 +54,18 @@ void parallelwavefront(std::vector<double> &M, const uint64_t &N){
 }
 
 int main(int argc, char *argv[]) {
-    uint64_t N = 10;    // default size of the matrix (NxN)
+    uint64_t N = 516;    // default size of the matrix (NxN)
+    int nw = 4;          // default number of workers
 
-    if (argc < 2) {
-		std::printf("use: %s N \n", argv[0]);
-		std::printf("     N size of the square matrix\n");		
+    if (argc != 2 && argc != 3) {
+		std::printf("use: %s N nw\n", argv[0]);
+		std::printf("     N size of the square matrix\n");
+        std::printf("     nw number of workers\n");
 		return -1;
 	}
-	else {
+	if (argc > 2) {
 		N = std::stol(argv[1]);
+        nw = std::stoi(argv[2]);
 	}
     
     // Allocate the matrix as a single vector
