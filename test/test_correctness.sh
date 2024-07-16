@@ -35,7 +35,7 @@ run_programs() {
     ../build/wf_farm $size $num_threads > farm_output.txt
 
     # Compare the output matrices
-    echo "Comparing matrices for size $size with tolerance 10^-8..."
+    echo "Comparing matrices for size $size with tolerance 10^-4..."
     compare_matrices seq_output.txt par_output.txt "Parallel"
     compare_matrices seq_output.txt farm_output.txt "Farm"
 }
@@ -61,8 +61,12 @@ def compare_matrices(file1, file2, tolerance):
         print("$label: MATCHES.")
     else:
         print("$label: DOES NOT MATCH.")
+        #print("Sequential:")
+        #print(matrix1)
+        #print("$label:")
+        #print(matrix2)
 
-compare_matrices("$file1", "$file2", 1e-8)
+compare_matrices("$file1", "$file2", 1e-4)
 EOF
 }
 

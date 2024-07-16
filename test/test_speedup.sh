@@ -2,13 +2,13 @@
 
 # Check if arguments are provided correctly
 if [ $# -lt 2 ]; then
-    echo "Usage: $0 <test_case_number> <num_threads>"
+    echo "Usage: $0 <test_case_number> <num_workers>"
     exit 1
 fi
 
 # Extract inputs
 test_case=$1
-num_threads=$2
+num_workers=$2
 
 # Define matrix sizes for each test case 
 declare -a case1_sizes=(10 50 100)
@@ -25,17 +25,18 @@ make -j 8
 run_programs() {
     local size=$1
 
-    echo "num_threads: $num_threads"
+    echo "Matrix size: $size"
+    echo "num_workers: $num_workers"
     # Run the sequential version and get the time
     SEQ_TIME=$(../build/wf_sequential $size)
     echo "Sequential:  $SEQ_TIME seconds"
 
     # Run the FastFlow parallel version with specified number of threads
-    PAR_TIME=$(../build/wf_parallel $size $num_threads)
+    PAR_TIME=$(../build/wf_parallel $size $num_workers)
     echo "FF Parallel: $PAR_TIME seconds"
 
     # Run the FastFlow farm version with specified number of threads
-    FARM_TIME=$(../build/wf_farm $size $num_threads)
+    FARM_TIME=$(../build/wf_farm $size $num_workers)
     echo "FF Farm:     $FARM_TIME seconds"
 
     # Calculate the speedup
@@ -45,6 +46,7 @@ run_programs() {
     echo "Speedup Parallel: $PAR_SPEEDUP"
     echo "Speedup Farm:     $FARM_SPEEDUP"
     echo
+    echo "------------------------------------"
 }
 
 # Determine which test case to run
@@ -57,6 +59,10 @@ case $test_case in
         echo "Running test case 2"
         sizes=("${case2_sizes[@]}")
         ;;
+    3)
+        echo "Running test case 3"
+        sizes=("${case3_sizes[@]}")
+        ;;
     *)
         echo "Invalid test case number."
         exit 1
@@ -65,7 +71,4 @@ esac
 
 # Loop through sizes for the selected test case
 for size in "${sizes[@]}"; do
-    echo "Matrix size: $size"
     run_programs $size
-    echo "----------------------------------------"
-done
