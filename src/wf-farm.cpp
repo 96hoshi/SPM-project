@@ -12,13 +12,6 @@
 
 using namespace ff;
 
-//TODO: use proper type
-struct Task {
-    uint64_t k;
-    uint64_t m;
-    uint64_t task_size;
-};
-
 
 // Print the matrix
 void printMatrix(const std::vector<double>& M, const uint64_t& N) {
@@ -30,11 +23,18 @@ void printMatrix(const std::vector<double>& M, const uint64_t& N) {
     }
 }
 
+//TODO: use proper type
+struct Task {
+    uint64_t k;
+    uint64_t m;
+    uint64_t task_size;
+};
+
 // Emitter class to distribute tasks
 struct Emitter: ff_monode_t<bool, Task> {
     uint64_t N;         // Number of elements in the matrix (NxN)
     uint64_t k;         // Current diagonal index
-    int nw;             // Number of workers
+    uint nw;            // Number of workers
     int chunk_size;     // Number of elements in the diagonal for each worker
 
     Emitter(uint64_t N, int nw) : N(N), nw(nw), k(1){
@@ -43,6 +43,10 @@ struct Emitter: ff_monode_t<bool, Task> {
     }
 
     Task* svc(bool* f) {
+        if (f != nullptr && *f) {
+            //the diagonal is completed
+            delete f;
+        }
 
         for (uint64_t i = 0; i < (N - k); i += chunk_size) {
             uint64_t chunk = std::min(chunk_size, static_cast<int>(N - k - i));
@@ -88,16 +92,17 @@ struct Collector : ff_minode_t<Task, bool> {
 struct Worker: ff_node_t<Task, Task> {
     std::vector<double>& M;
     uint64_t N;
+    double result = 0.0;
 
     Worker(std::vector<double>& M, uint64_t N) : M(M), N(N) {}
 
     Task* svc(Task* task) {
-        uint64_t m = task->m;                    // Row index
-        const uint64_t k = task->k;              // Diagonal index
+        uint64_t m = task->m;                         // Row index
+        const uint64_t k = task->k;                   // Diagonal index
         const uint64_t task_size = task->task_size;   // Number of elements in the diagonal
 
         // Perform the computation for the matrix diagonal element
-        std::vector<double> v_m(k), v_mk(k);        
+        //std::vector<double> v_m(k), v_mk(k);        
         uint64_t end = std::min(N - k, m + task_size);
 
         // Compute the diagonal for the given task length
@@ -105,26 +110,19 @@ struct Worker: ff_node_t<Task, Task> {
             auto mk = m + k;
             auto i = m * N;
 
+            result = 0.0;
             for (uint64_t j = 0; j < k; ++j) {
-                v_m[j] = M[i + (m + j)];        // M[m][m+j]
-                v_mk[j] = M[(mk - j) * N + mk]; // M[m+k-j][m+k]
+                // v_m[j] = M[i + (m + j)];        // M[m][m+j]
+                // v_mk[j] = M[(mk - j) * N + mk]; // M[m+k-j][m+k]
+                // result += v_m[j] * v_mk[j];
+                result += M[i + (m + j)] * M[(mk - j) * N + mk]; // M[m][m+j] * M[m+k-j][m+k]
             }
             // Compute the cube root of the dot product
-            // TODO: compare function call with inline code
-            M[i + mk] = dotProduct(v_m, v_mk); // M[m][m+k]
-        }
+            M[i + mk] = std::cbrt(result);
 
+        }
         // Send feedback to the emitter to indicate completion
         return task;
-    }
-
-    // Function to perform cube root of dot product
-    inline double dotProduct(const std::vector<double>& v1, const std::vector<double>& v2) {
-        double result = 0.0;
-        for(size_t i = 0; i < v1.size(); ++i) {
-            result += v1[i] * v2[i];
-        }
-        return std::cbrt(result);
     }
 };
 

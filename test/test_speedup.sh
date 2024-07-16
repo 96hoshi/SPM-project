@@ -15,52 +15,45 @@ declare -a case1_sizes=(10 50 100)
 declare -a case2_sizes=(200 500 1000)
 declare -a case3_sizes=(2000 5000 10000)
 
-# Compilation
-#mkdir ../build
-cd ../build/
-cmake -DENABLE_BENCHMARK=ON .. 
-make -j 8 
+# Output file for all results
+output_file="./results/speedup_summary.txt"
 
-# Function to run the programs for a given matrix size
+# Function to run the programs for a given matrix size and save results to output file
 run_programs() {
     local size=$1
 
-    echo "Matrix size: $size"
-    echo "num_workers: $num_workers"
-    # Run the sequential version and get the time
+    # Run the sequential version and save output
     SEQ_TIME=$(../build/wf_sequential $size)
-    echo "Sequential:  $SEQ_TIME seconds"
 
-    # Run the FastFlow parallel version with specified number of threads
+    # Run the FastFlow parallel version with specified number of threads and save output
     PAR_TIME=$(../build/wf_parallel $size $num_workers)
-    echo "FF Parallel: $PAR_TIME seconds"
 
-    # Run the FastFlow farm version with specified number of threads
+    # Run the FastFlow farm version with specified number of threads and save output
     FARM_TIME=$(../build/wf_farm $size $num_workers)
-    echo "FF Farm:     $FARM_TIME seconds"
 
-    # Calculate the speedup
+    # Calculate the speedup and save results
     PAR_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $PAR_TIME" | bc)
     FARM_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $FARM_TIME" | bc)
 
-    echo "Speedup Parallel: $PAR_SPEEDUP"
-    echo "Speedup Farm:     $FARM_SPEEDUP"
-    echo
-    echo "------------------------------------"
+    # Append results to output file
+    echo "Test Case: $test_case, Matrix Size: $size, Num Workers: $num_workers" >> $output_file
+    echo "Sequential Time:  $SEQ_TIME seconds" >> $output_file
+    echo "FF Parallel Time: $PAR_TIME seconds" >> $output_file
+    echo "FF Farm Time:     $FARM_TIME seconds" >> $output_file
+    echo "Speedup Parallel: $PAR_SPEEDUP" >> $output_file
+    echo "Speedup Farm:     $FARM_SPEEDUP" >> $output_file
+    echo "------------------------------------" >> $output_file
 }
 
 # Determine which test case to run
 case $test_case in
     1)
-        echo "Running test case 1"
         sizes=("${case1_sizes[@]}")
         ;;
     2)
-        echo "Running test case 2"
         sizes=("${case2_sizes[@]}")
         ;;
     3)
-        echo "Running test case 3"
         sizes=("${case3_sizes[@]}")
         ;;
     *)
@@ -69,6 +62,9 @@ case $test_case in
         ;;
 esac
 
-# Loop through sizes for the selected test case
+# Loop through sizes for the selected test case and save the results
 for size in "${sizes[@]}"; do
     run_programs $size
+done
+
+echo "Results summary saved in $output_file"
