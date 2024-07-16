@@ -16,7 +16,7 @@ using namespace ff;
 struct Task {
     uint64_t k;
     uint64_t m;
-    int task_size;
+    uint64_t task_size;
 };
 
 
@@ -31,58 +31,56 @@ void printMatrix(const std::vector<double>& M, const uint64_t& N) {
 }
 
 // Emitter class to distribute tasks
-struct Emitter: ff_monode_t<Task, Task> {
+struct Emitter: ff_monode_t<bool, Task> {
     uint64_t N;         // Number of elements in the matrix (NxN)
     uint64_t k;         // Current diagonal index
     int nw;             // Number of workers
     int chunk_size;     // Number of elements in the diagonal for each worker
-    int feedback_count; // Counter to track feedback from workers
-    bool diag_done;
 
-    Emitter(uint64_t N, int nw) : N(N), nw(nw), k(1), feedback_count(0), diag_done(false) {
+    Emitter(uint64_t N, int nw) : N(N), nw(nw), k(1){
         // Same chunk size to all workers for static scheduling
         chunk_size = static_cast<int>(N / nw);
     }
 
-    Task* svc(Task* task) {
-        // first input
-        printf("Emitter: received task\n");
-        if (task == nullptr || diag_done) { // Send tasks to workers
-            diag_done = false;
-            for (uint64_t i = 0; i < (N - k); i += chunk_size) {
-                int chunk = std::min(chunk_size, static_cast<int>(N - k - i));
-                ff_send_out(new Task{k, i, chunk});
-                printf("Emitter: sent task (%ld, %ld, %d)\n", k, i, chunk);
-                }
-            printf("Emitter: sent all tasks for diagonal %ld\n", k);
-        } else {
-            // check feedback from workers
-            if (feedback_count < N - k) {
-                // Increment feedback count
-                feedback_count += task->task_size;
-                printf("FB: received feedback %d\n", feedback_count);
-                delete task;
-            }
-            if (feedback_count == N - k) {
-                // All feedback received
-                printf("FB: received all feedback\n");
-                feedback_count = 0;
-                ++k;
-                diag_done = true;
-                // Continue processing, if not reached the end
-                return GO_ON;
-            }
-        } if (k == N) {
-            printf("Emitter: sent EOS\n");
+    Task* svc(bool* f) {
+
+        for (uint64_t i = 0; i < (N - k); i += chunk_size) {
+            uint64_t chunk = std::min(chunk_size, static_cast<int>(N - k - i));
+            ff_send_out(new Task{k, i, chunk});
+        }
+        // Increase the diagonal index
+        ++k;
+        
+        if (k == N) {
             return EOS;
         }
-
         return GO_ON;
     }
+};
 
-    void svc_end() {
-        // Do nothing
-        printf("Emitter: END\n");
+struct Collector : ff_minode_t<Task, bool> {
+    uint64_t N;                 // Number of elements in the matrix (NxN)
+    uint64_t k;                 // Current diagonal index
+    uint64_t feedback_count;    // Number of feedback received
+
+    Collector(uint64_t N) : N(N), feedback_count(0), k(1) {}
+
+    bool* svc(Task* task) {
+        if (task == nullptr) {
+            return GO_ON;
+        }
+        // Receive feedback from workers
+        feedback_count += task->task_size;
+
+        if (feedback_count == N - k) {
+            feedback_count = 0;
+            ++k;
+            // Send signal to the emitter
+            bool* done = new bool(true);
+            ff_send_out(done);
+        }
+        delete task;
+        return GO_ON;
     }
 };
 
@@ -96,13 +94,11 @@ struct Worker: ff_node_t<Task, Task> {
     Task* svc(Task* task) {
         uint64_t m = task->m;                    // Row index
         const uint64_t k = task->k;              // Diagonal index
-        const int task_size = task->task_size;   // Number of elements in the diagonal
+        const uint64_t task_size = task->task_size;   // Number of elements in the diagonal
 
         // Perform the computation for the matrix diagonal element
-        std::vector<double> v_m(k), v_mk(k);
-        printf("Worker: received task (%ld, %ld, %d)\n", k, m, task_size);
-        
-        int end = std::min(N - k, m + task_size);
+        std::vector<double> v_m(k), v_mk(k);        
+        uint64_t end = std::min(N - k, m + task_size);
 
         // Compute the diagonal for the given task length
         for (; m < end; ++m) {
@@ -119,10 +115,7 @@ struct Worker: ff_node_t<Task, Task> {
         }
 
         // Send feedback to the emitter to indicate completion
-        ff_send_out(task);
-        delete task;
-
-        return GO_ON;
+        return task;
     }
 
     // Function to perform cube root of dot product
@@ -145,12 +138,13 @@ int farm_wavefront(std::vector<double>& M, const uint64_t& N, const int nw) {
     }
 
     // Create farm
-    ff_Farm<std::pair<int, int>> farm(move(workers));
+    ff_Farm<std::pair<int, int>> farm(std::move(workers));
     Emitter emitter(N, nw);
+    Collector collector(N);
     farm.add_emitter(emitter);
+    farm.add_collector(collector);
     farm.wrap_around();
     // farm.set_scheduling_ondemand(); 
-
 
     if (farm.run_and_wait_end() < 0) {
         error("running farm");
@@ -195,7 +189,7 @@ int main(int argc, char *argv[]) {
     // TODO: use utils macro
     #ifdef BENCHMARK
         auto a = std::chrono::system_clock::now();
-        farm_wavefront(M, N, nw) < 0;
+        farm_wavefront(M, N, nw);
         auto b = std::chrono::system_clock::now();
         std::chrono::duration<double> delta = b-a;
         std::cout << std::fixed << std::setprecision(6) << delta.count() << std::endl;
@@ -206,10 +200,6 @@ int main(int argc, char *argv[]) {
         }
         printMatrix(M, N);
     #endif
-
-    // TIMERSTART(faram_wavefront);
-    // farm_wavefront(M, N, nw);
-    // TIMERSTOP(faram_wavefront);
 
     return 0;
 }

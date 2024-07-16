@@ -61,10 +61,10 @@ def compare_matrices(file1, file2, tolerance):
         print("$label: MATCHES.")
     else:
         print("$label: DOES NOT MATCH.")
-        print("Matrix 1:")
-        print(matrix1)
-        print("Matrix 2:")
-        print(matrix2)
+        #print("Sequential:")
+        #print(matrix1)
+        #print("$label:")
+        #print(matrix2)
 
 compare_matrices("$file1", "$file2", 1e-4)
 EOF
