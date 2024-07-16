@@ -16,7 +16,7 @@ using namespace ff;
 struct Task {
     uint64_t k;
     uint64_t m;
-    int task_size; 
+    int task_size;
 };
 
 
@@ -37,49 +37,52 @@ struct Emitter: ff_monode_t<Task, Task> {
     int nw;             // Number of workers
     int chunk_size;     // Number of elements in the diagonal for each worker
     int feedback_count; // Counter to track feedback from workers
+    bool diag_done;
 
-    Emitter(uint64_t N, int nw) : N(N), nw(nw), k(1), feedback_count(0) {
+    Emitter(uint64_t N, int nw) : N(N), nw(nw), k(1), feedback_count(0), diag_done(false) {
         // Same chunk size to all workers for static scheduling
         chunk_size = static_cast<int>(N / nw);
     }
 
     Task* svc(Task* task) {
-        // Send tasks to workers
-        if (k < N) {
+        // first input
+        printf("Emitter: received task\n");
+        if (task == nullptr || diag_done) { // Send tasks to workers
+            diag_done = false;
             for (uint64_t i = 0; i < (N - k); i += chunk_size) {
-                int chunk = std::min(chunk_size, static_cast<int>(N - k - i + 1));
+                int chunk = std::min(chunk_size, static_cast<int>(N - k - i));
                 ff_send_out(new Task{k, i, chunk});
-                //printf("Emitter: sent task (%ld, %ld, %d)\n", k, i, chunk);
+                printf("Emitter: sent task (%ld, %ld, %d)\n", k, i, chunk);
                 }
-            //printf("Emitter: sent all tasks for diagonal %ld\n", k);
-            ++k;
-            return GO_ON; // Continue processing
+            printf("Emitter: sent all tasks for diagonal %ld\n", k);
         } else {
-            //printf("Emitter: sent EOS\n");
+            // check feedback from workers
+            if (feedback_count < N - k) {
+                // Increment feedback count
+                feedback_count += task->task_size;
+                printf("FB: received feedback %d\n", feedback_count);
+                delete task;
+            }
+            if (feedback_count == N - k) {
+                // All feedback received
+                printf("FB: received all feedback\n");
+                feedback_count = 0;
+                ++k;
+                diag_done = true;
+                // Continue processing, if not reached the end
+                return GO_ON;
+            }
+        } if (k == N) {
+            printf("Emitter: sent EOS\n");
             return EOS;
         }
+
+        return GO_ON;
     }
 
     void svc_end() {
         // Do nothing
-        //printf("Emitter: END\n");
-    }
-
-    void feedback(Task* finshed_task) {
-        // Receive feedback from workers
-        if (feedback_count < N) {
-            // Continue processing
-            //printf("FB: received feedback\n");
-            feedback_count += finshed_task->task_size;
-            delete finshed_task;
-        } else {
-            // All feedback received
-            //printf("FB: received all feedback %d\n", feedback_count);
-            feedback_count = 0;
-            delete finshed_task;
-            // Continue processing
-            ff_send_out(nullptr);
-        }
+        printf("Emitter: END\n");
     }
 };
 
@@ -97,7 +100,7 @@ struct Worker: ff_node_t<Task, Task> {
 
         // Perform the computation for the matrix diagonal element
         std::vector<double> v_m(k), v_mk(k);
-        //printf("Worker: received task (%ld, %ld, %d)\n", k, m, task_size);
+        printf("Worker: received task (%ld, %ld, %d)\n", k, m, task_size);
         
         int end = std::min(N - k, m + task_size);
 

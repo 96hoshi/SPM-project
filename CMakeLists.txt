@@ -15,7 +15,7 @@ option(ENABLE_BENCHMARK "Enable times benchmarking" OFF)
 # Set the flags for the different build types
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg -Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O3 -pg -Wall -Wextra -pthread")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -pthread -DNDEBUG")
 
 # Add the preprocessor definition for the benchmarking
 if(ENABLE_BENCHMARK)
