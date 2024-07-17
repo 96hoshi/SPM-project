@@ -31,41 +31,41 @@ endif()
 
 # Source files for sequential target
 set(SEQ_SOURCES
-    src/wf-sequential.cpp
+    src/sequential_wf.cpp
 )
 
 # Source files for FastFlow target
 set(FFP_SOURCES
-    src/wf-parallel.cpp
+    src/ff_parallel_wf.cpp
 )
 
 # Source files for FastFlow target
 set(FFF_SOURCES
-    src/wf-farm.cpp
+    src/ff_farm_wf.cpp
 )
 
 # Source files for MPI target
 set(MPI_SOURCES
-    src/mpi-parallel.cpp
+    src/mpi_wf.cpp
 )
 
 # Add executable for sequential target 
-add_executable(wf_sequential ${SEQ_SOURCES})
-target_include_directories(wf_sequential PRIVATE include)
+add_executable(sequential_wf ${SEQ_SOURCES})
+target_include_directories(sequential_wf PRIVATE include)
 
 # Add executable for FastFlow target
-add_executable(wf_parallel ${FFP_SOURCES})
-target_include_directories(wf_parallel PRIVATE ${FF_ROOT} include)
+add_executable(ff_parallel_wf ${FFP_SOURCES})
+target_include_directories(ff_parallel_wf PRIVATE ${FF_ROOT} include)
 
 # Add executable for FastFlow target
-add_executable(wf_farm ${FFF_SOURCES})
-target_include_directories(wf_farm PRIVATE ${FF_ROOT} include)
+add_executable(ff_farm_wf ${FFF_SOURCES})
+target_include_directories(ff_farm_wf PRIVATE ${FF_ROOT} include)
 
 # Add executable for MPI target
-add_executable(mpi_parallel ${MPI_SOURCES})
-target_include_directories(mpi_parallel PRIVATE include)
+add_executable(mpi_wf ${MPI_SOURCES})
+target_include_directories(mpi_wf PRIVATE include)
 
 # Link MPI
 find_package(MPI REQUIRED)
-target_include_directories(mpi_parallel PRIVATE ${MPI_CXX_INCLUDE_PATH})
-target_link_libraries(mpi_parallel ${MPI_CXX_LIBRARIES})
+target_include_directories(mpi_wf PRIVATE ${MPI_CXX_INCLUDE_PATH})
+target_link_libraries(mpi_wf ${MPI_CXX_LIBRARIES})

@@ -23,13 +23,13 @@ run_programs() {
     local size=$1
 
     # Run the sequential version and save output
-    SEQ_TIME=$(../build/wf_sequential $size)
+    SEQ_TIME=$(../build/sequential_wf $size)
 
     # Run the FastFlow parallel version with specified number of threads and save output
-    PAR_TIME=$(../build/wf_parallel $size $num_workers)
+    PAR_TIME=$(../build/ff_parallel_wf $size $num_workers)
 
     # Run the FastFlow farm version with specified number of threads and save output
-    FARM_TIME=$(../build/wf_farm $size $num_workers)
+    FARM_TIME=$(../build/ff_farm_wf $size $num_workers)
 
     # Calculate the speedup and save results
     PAR_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $PAR_TIME" | bc)

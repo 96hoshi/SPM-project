@@ -27,13 +27,13 @@ run_programs() {
     echo "Matrix size: $size"
     echo "num_workers: $num_workers"
     # Run the sequential version and get the output
-    ../build/wf_sequential $size > seq_output.txt
+    ../build/sequential_wf $size > seq_output.txt
 
     # Run the FastFlow parallel version with specified number of threads
-    ../build/wf_parallel $size $num_workers > par_output.txt
+    ../build/ff_parallel_wf $size $num_workers > par_output.txt
 
     # Run the FastFlow farm version with specified number of threads
-    ../build/wf_farm $size $num_workers > farm_output.txt
+    ../build/ff_farm_wf $size $num_workers > farm_output.txt
 
     # Compare the output matrices
     echo "Comparing matrices for size $size with tolerance 10^-4..."

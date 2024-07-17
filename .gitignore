@@ -37,5 +37,8 @@ ff/
 # CMake
 build/
 
+# results
+results/
+
 # Visual Studio Code
 .vscode
