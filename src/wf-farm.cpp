@@ -12,6 +12,8 @@
 
 using namespace ff;
 
+#define MAX_CHUNK_SIZE 64
+
 
 // Print the matrix
 void printMatrix(const std::vector<double>& M, const uint64_t& N) {
@@ -27,7 +29,7 @@ void printMatrix(const std::vector<double>& M, const uint64_t& N) {
 struct Task {
     uint64_t k;
     uint64_t m;
-    uint64_t task_size;
+    uint task_size;
 };
 
 // Emitter class to distribute tasks
@@ -39,17 +41,18 @@ struct Emitter: ff_monode_t<bool, Task> {
 
     Emitter(uint64_t N, int nw) : N(N), nw(nw), k(1){
         // Same chunk size to all workers for static scheduling
-        chunk_size = static_cast<int>(N / nw);
+        chunk_size = static_cast<uint64_t>(std::ceil(static_cast<double>(N) / nw));
+        chunk_size = std::min(chunk_size, MAX_CHUNK_SIZE);
     }
 
     Task* svc(bool* f) {
         if (f != nullptr && *f) {
-            //the diagonal is completed
+            // The diagonal is completed
             delete f;
         }
 
         for (uint64_t i = 0; i < (N - k); i += chunk_size) {
-            uint64_t chunk = std::min(chunk_size, static_cast<int>(N - k - i));
+            uint chunk = std::min(chunk_size, static_cast<int>(N - k - i));
             ff_send_out(new Task{k, i, chunk});
         }
         // Increase the diagonal index
@@ -65,7 +68,7 @@ struct Emitter: ff_monode_t<bool, Task> {
 struct Collector : ff_minode_t<Task, bool> {
     uint64_t N;                 // Number of elements in the matrix (NxN)
     uint64_t k;                 // Current diagonal index
-    uint64_t feedback_count;    // Number of feedback received
+    uint feedback_count;        // Number of feedback received
 
     Collector(uint64_t N) : N(N), feedback_count(0), k(1) {}
 
@@ -88,42 +91,85 @@ struct Collector : ff_minode_t<Task, bool> {
     }
 };
 
-// Worker class to perform tasks
+// // Worker class to perform tasks
+// struct Worker: ff_node_t<Task, Task> {
+//     std::vector<double>& M;
+//     uint64_t N;
+//     double result = 0.0;
+//     uint64_t mk = 0;                         // Column index   
+//     uint64_t i = 0;                          // Row index
+
+//     Worker(std::vector<double>& M, uint64_t N) : M(M), N(N) {}
+
+//     Task* svc(Task* task) {
+//         uint64_t m = task->m;                    // Row index
+//         const uint64_t k = task->k;              // Diagonal index
+//         const uint task_size = task->task_size;  // Number of elements in the diagonal
+
+
+//         // Perform the computation for the matrix diagonal element
+//         //std::vector<double> v_m(k), v_mk(k);        
+//         uint64_t end = std::min(N - k, m + task_size);
+
+//         // Compute the diagonal for the given task length
+//         for (; m < end; ++m) {
+//             mk = m + k;
+//             i = m * N;
+
+//             result = 0.0;
+//             for (uint64_t j = 0; j < k; ++j) {
+//                 // v_m[j] = M[i + (m + j)];        // M[m][m+j]
+//                 // v_mk[j] = M[(mk - j) * N + mk]; // M[m+k-j][m+k]
+//                 // result += v_m[j] * v_mk[j];
+//                 result += M[i + (m + j)] * M[(mk - j) * N + mk]; // M[m][m+j] * M[m+k-j][m+k]
+//             }
+//             // Compute the cube root of the dot product
+//             M[i + mk] = std::cbrt(result);
+//         }
+//         // Send feedback to the emitter to indicate completion
+//         return task;
+//     }
+// };
+
+// Worker class optimized
 struct Worker: ff_node_t<Task, Task> {
     std::vector<double>& M;
     uint64_t N;
+    uint64_t mk = 0;                         // Column index   
+    uint64_t row = 0;                          // Row index
+    uint64_t row_diag = 0;                     // Row index for the diagonal
     double result = 0.0;
 
     Worker(std::vector<double>& M, uint64_t N) : M(M), N(N) {}
 
     Task* svc(Task* task) {
-        uint64_t m = task->m;                         // Row index
-        const uint64_t k = task->k;                   // Diagonal index
-        const uint64_t task_size = task->task_size;   // Number of elements in the diagonal
+        uint64_t m = task->m;                    // Row index
+        const uint64_t k = task->k;              // Diagonal index
+        const uint task_size = task->task_size;  // Number of elements in the diagonal
 
         // Perform the computation for the matrix diagonal element
-        //std::vector<double> v_m(k), v_mk(k);        
         uint64_t end = std::min(N - k, m + task_size);
 
         // Compute the diagonal for the given task length
         for (; m < end; ++m) {
-            auto mk = m + k;
-            auto i = m * N;
+            mk = m + k;
+            row = m * N;
+            row_diag = mk * N;
 
             result = 0.0;
             for (uint64_t j = 0; j < k; ++j) {
-                // v_m[j] = M[i + (m + j)];        // M[m][m+j]
-                // v_mk[j] = M[(mk - j) * N + mk]; // M[m+k-j][m+k]
-                // result += v_m[j] * v_mk[j];
-                result += M[i + (m + j)] * M[(mk - j) * N + mk]; // M[m][m+j] * M[m+k-j][m+k]
+                // read the elements from the lower triangular part of the matrix
+                result += M[row + (m + j)] * M[row_diag + (mk - j)]; // M[m][m+j] * M[m+k][m+k-j]
             }
-            // Compute the cube root of the dot product
-            M[i + mk] = std::cbrt(result);
-
+            // store the result in the lower triangular part of the matrix
+            M[row_diag + m] = std::cbrt(result); // M[m+k][m]
+            // store the result also in the upper triangular part of the matrix
+            M[row + mk] = M[row_diag + m]; // M[m][m+k] = M[m+k][m]
         }
         // Send feedback to the emitter to indicate completion
         return task;
     }
+
 };
 
 // Function to perform wavefront
@@ -147,6 +193,12 @@ int farm_wavefront(std::vector<double>& M, const uint64_t& N, const int nw) {
     if (farm.run_and_wait_end() < 0) {
         error("running farm");
         return -1;
+    }
+    // clear intermedaite results in the lower triangular part of the matrix
+    for (uint64_t i = 0; i < N; ++i) {
+        for (uint64_t j = 0; j < i; ++j) {
+            M[i * N + j] = 0.0;
+        }
     }
     return 0;
 }
