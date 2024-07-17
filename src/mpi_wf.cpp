@@ -17,12 +17,16 @@ void printMatrix(const std::vector<double>& M, const uint64_t& N) {
 }
 
 // Worker function to perform tasks
-void workerFunction(std::vector<double>& M, uint64_t N) {
+void workerLoop(int64_t N) {
     MPI_Status status;
     uint64_t k, m;
     uint task_size;
+    int64_t size = N * N;
+    std::vector<double> M(size);
 
     while (true) {
+        std::printf("Worker\n");
+        MPI_Recv(M.data(), size, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
         MPI_Recv(&k, 1, MPI_UINT64_T, 0, 0, MPI_COMM_WORLD, &status);
         if (k == N) break; // Exit signal
 
@@ -50,15 +54,22 @@ void workerFunction(std::vector<double>& M, uint64_t N) {
 }
 
 // Emitter function to distribute tasks
-void emitterFunction(uint64_t N, int size) {
+void emitterLoop(std::vector<double>& M ,uint64_t N, int size) {
     uint64_t k = 1;
     int chunk_size = static_cast<uint64_t>(std::ceil(static_cast<double>(N) / (size - 1)));
     chunk_size = std::min(chunk_size, MAX_CHUNK_SIZE);
+    std::printf("Emitter\n");
+
 
     while (k < N) {
+        std::printf("k = %lu\n", k);
         for (uint64_t i = 0; i < (N - k); i += chunk_size) {
             uint chunk = std::min(chunk_size, static_cast<int>(N - k - i));
             for (int rank = 1; rank < size; ++rank) {
+                // Send the matrix
+                // TODO: use the correct type for the matrix ??????
+                // do the workers need all the matrix or?
+                MPI_Send(&M[i * N], N * chunk, MPI_DOUBLE, rank, 0, MPI_COMM_WORLD);
                 MPI_Send(&k, 1, MPI_UINT64_T, rank, 0, MPI_COMM_WORLD);
                 MPI_Send(&i, 1, MPI_UINT64_T, rank, 0, MPI_COMM_WORLD);
                 MPI_Send(&chunk, 1, MPI_UNSIGNED, rank, 0, MPI_COMM_WORLD);
@@ -100,17 +111,16 @@ int main(int argc, char *argv[]) {
         }
 
         // Allocate the matrix
-        std::vector<double> M(N * N, 0.0);
+        std::vector<double> M(N * N);
         for (uint64_t i = 0; i < N; ++i) {
             M[i * N + i] = static_cast<double>(i + 1) / N;
         }
 
-        emitterFunction(N, size);
+        emitterLoop(M, N, size);
 
         printMatrix(M, N);
     } else {
-        std::vector<double> M(N * N, 0.0);
-        workerFunction(M, N);
+        workerLoop(N);
     }
 
     MPI_Finalize();
