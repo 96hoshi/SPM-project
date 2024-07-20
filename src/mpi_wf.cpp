@@ -4,124 +4,124 @@
 #include <mpi.h>
 #include <cstdint>
 
-#define MAX_CHUNK_SIZE 64
-
-// Print the matrix
-void printMatrix(const std::vector<double>& M, const uint64_t& N) {
-    for (size_t i = 0; i < N; ++i) {
-        for (size_t j = 0; j < N; ++j) {
-            std::printf("%f ", M[i * N + j]);
-        }
-        std::printf("\n");
+// Function to compute dot product of two arrays
+double compute_dot_product(const double* arr1, const double* arr2, int size) {
+    double dot_product = 0.0;
+    for (int i = 0; i < size; ++i) {
+        dot_product += arr1[i] * arr2[i];
     }
+    return dot_product;
 }
 
-// Worker function to perform tasks
-void workerLoop(int64_t N) {
-    MPI_Status status;
-    uint64_t k, m;
-    uint task_size;
-    int64_t size = N * N;
-    std::vector<double> M(size);
-
-    while (true) {
-        std::printf("Worker\n");
-        MPI_Recv(M.data(), size, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
-        MPI_Recv(&k, 1, MPI_UINT64_T, 0, 0, MPI_COMM_WORLD, &status);
-        if (k == N) break; // Exit signal
-
-        MPI_Recv(&m, 1, MPI_UINT64_T, 0, 0, MPI_COMM_WORLD, &status);
-        MPI_Recv(&task_size, 1, MPI_UNSIGNED, 0, 0, MPI_COMM_WORLD, &status);
-
-        uint64_t mk, i;
-        double result;
-        uint64_t end = std::min(N - k, m + task_size);
-
-        for (; m < end; ++m) {
-            mk = m + k;
-            i = m * N;
-            result = 0.0;
-            for (uint64_t j = 0; j < k; ++j) {
-                result += M[i + (m + j)] * M[mk * N + (mk - j)];
-            }
-            M[mk * N + m] = std::cbrt(result);
-            M[i + mk] = M[mk * N + m];
-        }
-
-        uint64_t completed = end - m;
-        MPI_Send(&completed, 1, MPI_UINT64_T, 0, 0, MPI_COMM_WORLD);
-    }
+// Function to compute cubic root
+double compute_cubic_root(double value) {
+    return cbrt(value);
 }
 
-// Emitter function to distribute tasks
-void emitterLoop(std::vector<double>& M ,uint64_t N, int size) {
-    uint64_t k = 1;
-    int chunk_size = static_cast<uint64_t>(std::ceil(static_cast<double>(N) / (size - 1)));
-    chunk_size = std::min(chunk_size, MAX_CHUNK_SIZE);
-    std::printf("Emitter\n");
-
-
-    while (k < N) {
-        std::printf("k = %lu\n", k);
-        for (uint64_t i = 0; i < (N - k); i += chunk_size) {
-            uint chunk = std::min(chunk_size, static_cast<int>(N - k - i));
-            for (int rank = 1; rank < size; ++rank) {
-                // Send the matrix
-                // TODO: use the correct type for the matrix ??????
-                // do the workers need all the matrix or?
-                MPI_Send(&M[i * N], N * chunk, MPI_DOUBLE, rank, 0, MPI_COMM_WORLD);
-                MPI_Send(&k, 1, MPI_UINT64_T, rank, 0, MPI_COMM_WORLD);
-                MPI_Send(&i, 1, MPI_UINT64_T, rank, 0, MPI_COMM_WORLD);
-                MPI_Send(&chunk, 1, MPI_UNSIGNED, rank, 0, MPI_COMM_WORLD);
-            }
-        }
-
-        uint64_t feedback_count = 0;
-        while (feedback_count < (N - k)) {
-            uint64_t completed;
-            MPI_Status status;
-            MPI_Recv(&completed, 1, MPI_UINT64_T, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
-            feedback_count += completed;
-        }
-
-        ++k;
-    }
-
-    for (int rank = 1; rank < size; ++rank) {
-        MPI_Send(&N, 1, MPI_UINT64_T, rank, 0, MPI_COMM_WORLD); // Exit signal
-    }
-}
-
-int main(int argc, char *argv[]) {
-    uint64_t N = 516; // default size of the matrix (NxN)
-    int size, rank;
-
+int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    int rank, size;
+
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    if (argc == 2) {
-        N = std::stoul(argv[1]);
-    }
+    int N = 5;
 
-    if (rank == 0) {
-        if (N < 1) {
-            std::printf("N should be greater than 0\n");
-            MPI_Abort(MPI_COMM_WORLD, -1);
+    if (argc < 2) {
+        if (rank == 0) {
+            std::printf("use: %s N\n", argv[0]);
+            std::printf("     N size of the square matrix\n");
         }
-
-        // Allocate the matrix
-        std::vector<double> M(N * N);
-        for (uint64_t i = 0; i < N; ++i) {
-            M[i * N + i] = static_cast<double>(i + 1) / N;
-        }
-
-        emitterLoop(M, N, size);
-
-        printMatrix(M, N);
+        MPI_Finalize();
+        return -1;
     } else {
-        workerLoop(N);
+        N = std::stol(argv[1]);
     }
+
+    // Check the size of the matrix
+    if (N < 1) {
+        if (rank == 0) {
+            std::printf("N should be greater than 0\n");
+        }
+        MPI_Finalize();
+        return -1;
+    }
+
+    int mat_size = N * N;
+    double* matrix = new double[mat_size];
+
+    // Initialize matrix in the root process
+    if (rank == 0) {
+        for (int i = 0; i < N; ++i) {
+            matrix[i * N + i] = static_cast<double>(i);
+        }
+        for (int i = 0; i < N; ++i) {
+            for (int j = 0; j < i; ++j) {
+                matrix[i * N + j] = 0.0;
+            }
+        }
+    }
+
+    // Broadcast matrix to all processes
+    MPI_Bcast(matrix, mat_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    // Process each diagonal element
+    for (int k = 1; k < N; ++k) {
+        int rows_per_process = (N - k) / size;
+        int remaining_rows = (N - k) % size;
+
+        int start_row = rank * rows_per_process + std::min(rank, remaining_rows);
+        int end_row = start_row + rows_per_process + (rank < remaining_rows ? 1 : 0);
+        printf("Rank %d: start_row = %d, end_row = %d\n", rank, start_row, end_row);
+
+        std::vector<double> local_results(end_row - start_row, 0.0);
+
+        // todo: mismatch in the indices i wanna cry
+        for (int i = start_row; i < end_row; ++i) {
+            if (i + k < N) {
+                double dot_product = compute_dot_product(&matrix[i * N], &matrix[(i + k) * N], k);
+                local_results[i - start_row] = compute_cubic_root(dot_product);
+                std::printf("Rank %d: M[%d][%d] = %f\n", rank, i, i + k, local_results[i - start_row]);
+            }
+        }
+
+        // Gather results at the root process
+        if (rank == 0) {
+            std::vector<int> recv_counts(size);
+            std::vector<int> displs(size);
+
+            for (int i = 0; i < size; ++i) {
+                recv_counts[i] = (N - k) / size + (i < remaining_rows ? 1 : 0);
+                displs[i] = i * rows_per_process + std::min(i, remaining_rows);
+            }
+
+            std::vector<double> gathered_results(N - k, 0.0);
+            MPI_Gatherv(local_results.data(), local_results.size(), MPI_DOUBLE, gathered_results.data(), recv_counts.data(), displs.data(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+            // Update the matrix with the gathered results
+            for (int i = 0; i < N - k; ++i) {
+                matrix[i * N + (i + k)] = gathered_results[i];
+            }
+        } else {
+            MPI_Gatherv(local_results.data(), local_results.size(), MPI_DOUBLE, nullptr, nullptr, nullptr, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        }
+        printf("Rank %d: Done\n", rank);
+
+        // Broadcast updated matrix for next iteration
+        MPI_Bcast(matrix, mat_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    }
+
+    // Print the final matrix
+    if (rank == 0) {
+        for (int i = 0; i < N; ++i) {
+            for (int j = 0; j < N; ++j) {
+                std::printf("%f ", matrix[i * N + j]);
+            }
+            std::printf("\n");
+        }
+    }
+
+    delete[] matrix;
 
     MPI_Finalize();
     return 0;
