@@ -26,22 +26,29 @@ run_programs() {
     SEQ_TIME=$(../build/sequential_wf $size)
 
     # Run the FastFlow parallel version with specified number of threads and save output
-    PAR_TIME=$(../build/ff_parallel_wf $size $num_workers)
+    # PAR_TIME=$(../build/ff_parallel_wf $size $num_workers)
 
     # Run the FastFlow farm version with specified number of threads and save output
     FARM_TIME=$(../build/ff_farm_wf $size $num_workers)
 
+    # Run the MPI version with specified number of processes and save output
+    MPI_TIME=$(mpirun -np $num_workers ../build/mpi_wf $size)
+
     # Calculate the speedup and save results
-    PAR_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $PAR_TIME" | bc)
+    #PAR_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $PAR_TIME" | bc)
     FARM_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $FARM_TIME" | bc)
+    MPI_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $MPI_TIME" | bc)
 
     # Append results to output file
-    echo "Test Case: $test_case, Matrix Size: $size, Num Workers: $num_workers" >> $output_file
-    echo "Sequential Time:  $SEQ_TIME seconds" >> $output_file
-    echo "FF Parallel Time: $PAR_TIME seconds" >> $output_file
-    echo "FF Farm Time:     $FARM_TIME seconds" >> $output_file
-    echo "Speedup Parallel: $PAR_SPEEDUP" >> $output_file
-    echo "Speedup Farm:     $FARM_SPEEDUP" >> $output_file
+    echo "Test$test_case, Matrix Size: $size, #Workers: $num_workers" >> $output_file
+    echo "Seq:     $SEQ_TIME s" >> $output_file
+   # echo "FF-Par: $PAR_TIME seconds" >> $output_file
+    echo "FF-Farm: $FARM_TIME s" >> $output_file
+    echo "MPI:     $MPI_TIME s" >> $output_file
+    #echo "c Parallel: $PAR_SPEEDUP" >> $output_file
+    echo "Speedup Farm: $FARM_SPEEDUP" >> $output_file
+    echo "Speedup MPI:  $MPI_SPEEDUP" >> $output_file
+
     echo "------------------------------------" >> $output_file
 }
 

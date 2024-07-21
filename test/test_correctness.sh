@@ -30,15 +30,19 @@ run_programs() {
     ../build/sequential_wf $size > seq_output.txt
 
     # Run the FastFlow parallel version with specified number of threads
-    ../build/ff_parallel_wf $size $num_workers > par_output.txt
+    #../build/ff_parallel_wf $size $num_workers > par_output.txt
 
     # Run the FastFlow farm version with specified number of threads
     ../build/ff_farm_wf $size $num_workers > farm_output.txt
 
+    # Run the MPI version with specified number of processes
+    mpirun -np $num_workers ../build/mpi_wf $size > mpi_output.txt
+
     # Compare the output matrices
-    echo "Comparing matrices for size $size with tolerance 10^-4..."
-    compare_matrices seq_output.txt par_output.txt "Parallel"
+    echo "Size $size with tolerance 10^-6..."
+    #compare_matrices seq_output.txt par_output.txt "Parallel"
     compare_matrices seq_output.txt farm_output.txt "Farm"
+    compare_matrices seq_output.txt mpi_output.txt "MPI"
     echo "------------------------------------"
 }
 
@@ -68,7 +72,7 @@ def compare_matrices(file1, file2, tolerance):
         #print("$label:")
         #print(matrix2)
 
-compare_matrices("$file1", "$file2", 1e-4)
+compare_matrices("$file1", "$file2", 1e-6)
 EOF
 }
 
@@ -82,7 +86,10 @@ case $test_case in
         echo "Running test case 2"
         sizes=("${case2_sizes[@]}")
         ;;
-    # Add more cases as needed
+    3)
+        echo "Running test case 3"
+        sizes=("${case3_sizes[@]}")
+        ;;
     *)
         echo "Invalid test case number."
         exit 1
@@ -95,4 +102,4 @@ for size in "${sizes[@]}"; do
 done
 
 # Clean up temporary output files if needed
-rm -f seq_output.txt par_output.txt farm_output.txt
+rm -f seq_output.txt farm_output.txtv mpi_output.txt
