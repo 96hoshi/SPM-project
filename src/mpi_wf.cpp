@@ -5,7 +5,7 @@
 #include <cstdint>
 
 // Function to compute dot product of two arrays
-double compute_dot_product(const double* arr1, const double* arr2, int size) {
+double compute_dot_product(const std::vector<double> arr1, const std::vector<double> arr2, int size) {
     double dot_product = 0.0;
     for (int i = 0; i < size; ++i) {
         dot_product += arr1[i] * arr2[i];
@@ -47,23 +47,21 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    double start_time = 0;
     int mat_size = N * N;
-    double* matrix = new double[mat_size];
+    std::vector<double> matrix(N * N, 0.0);
 
     // Initialize matrix in the root process
     if (rank == 0) {
         for (int i = 0; i < N; ++i) {
-            matrix[i * N + i] = static_cast<double>(i);
+            matrix[i * N + i] = static_cast<double>(i + 1) / N;
         }
-        for (int i = 0; i < N; ++i) {
-            for (int j = 0; j < i; ++j) {
-                matrix[i * N + j] = 0.0;
-            }
-        }
+       start_time = MPI_Wtime();
     }
 
+    // TODO: use scatterv
     // Broadcast matrix to all processes
-    MPI_Bcast(matrix, mat_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(matrix.data(), mat_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     // Process each diagonal element
     for (int k = 1; k < N; ++k) {
@@ -72,20 +70,17 @@ int main(int argc, char** argv) {
 
         int start_row = rank * rows_per_process + std::min(rank, remaining_rows);
         int end_row = start_row + rows_per_process + (rank < remaining_rows ? 1 : 0);
-        printf("Rank %d: start_row = %d, end_row = %d\n", rank, start_row, end_row);
-        printf("Rank %d: rows_per_process = %d, remaining_rows = %d\n", rank, rows_per_process, remaining_rows);
 
-        std::vector<double> local_results(end_row - start_row, 200.0 + rank);
+        std::vector<double> local_results(end_row - start_row, 0.0);
 
-        // TODO: mismatch in the indices i wanna cry dai cazzo
-        // for (int i = start_row; i < end_row; ++i) {
-        //     if (i + k < N) {
-        //         double dot_product = compute_dot_product(&matrix[i * N], &matrix[(i + k) * N], k);
-        //         local_results[i - start_row] = compute_cubic_root(dot_product);
-        //         std::printf("Rank %d: M[%d][%d] = %f\n", rank, i, i + k, local_results[i - start_row]);
-        //     }
-        // }
-
+        // TODO: use Reudce
+        for (int i = start_row; i < end_row; ++i) {
+            // read colums per each process
+            for (int j = 0; j < k; ++j) {
+                local_results[i - start_row] += matrix[i * N + i + j ] * matrix[(i + k - j) * N + i + k];
+            }
+            local_results[i - start_row] = compute_cubic_root(local_results[i - start_row]);
+         }
 
         // Gather results at the root process
         if (rank == 0) {
@@ -102,8 +97,6 @@ int main(int argc, char** argv) {
             std::vector<double> gathered_results(N - k, 0.0);
             // Gather the results from all processes
             MPI_Gatherv(local_results.data(), local_results.size(), MPI_DOUBLE, gathered_results.data(), recv_counts.data(), displs.data(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
-            printf("Rank %d: gathered_results.size() = %d\n", rank, gathered_results.size());
-            printf("Rank %d: gathered_results.data() = %p\n", rank, gathered_results.data());
 
             // Update the matrix with the gathered results
             for (int i = 0; i < N - k; ++i) {
@@ -114,26 +107,27 @@ int main(int argc, char** argv) {
             MPI_Gatherv(local_results.data(), local_results.size(), MPI_DOUBLE, nullptr, nullptr, nullptr, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
         }
-        printf("Rank %d: Done\n", rank);
-
         // Broadcast updated matrix for next iteration
-        MPI_Bcast(matrix, mat_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        MPI_Bcast(matrix.data(), mat_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     }
     
     // Print the final matrix
-    if (rank == 0) {
-        //MPI_Barrier(MPI_COMM_WORLD);
+    if (rank == 0) {    
+        // stop timer
+        double end_time = MPI_Wtime();
 
-        std::printf("Final matrix:\n");
-        for (int i = 0; i < N; ++i) {
-            for (int j = 0; j < N; ++j) {
-                std::printf("%f ", matrix[i * N + j]);
+        #ifdef BENCHMARK
+        std::printf("%f\n", end_time - start_time);
+        # else 
+            //std::printf("Final matrix:\n");
+            for (int i = 0; i < N; ++i) {
+                for (int j = 0; j < N; ++j) {
+                    std::printf("%f ", matrix[i * N + j]);
+                }
+                std::printf("\n");
             }
-            std::printf("\n");
-        }
+        #endif
     }
-
-    delete[] matrix;
 
     MPI_Finalize();
     return 0;
