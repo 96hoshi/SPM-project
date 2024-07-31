@@ -7,12 +7,11 @@
 #include <ff/farm.hpp>
 
 #include "hpc_helpers.hpp"
-
-///#include "utils.hpp"
+//#include "utils.hpp"
 
 using namespace ff;
 
-#define MAX_CHUNK_SIZE 64
+#define MAX_CHUNK_SIZE 128
 
 
 // Print the matrix
@@ -50,10 +49,9 @@ struct Emitter: ff_monode_t<bool, Task> {
             // The diagonal is completed
             delete f;
         }
-
-        for (uint64_t i = 0; i < (N - k); i += chunk_size) {
-            uint chunk = std::min(chunk_size, static_cast<int>(N - k - i));
-            ff_send_out(new Task{k, i, chunk});
+        for (uint64_t m = 0; m < (N - k); m += chunk_size) {
+            uint chunk = std::min(chunk_size, static_cast<int>(N - k - m));
+            ff_send_out(new Task{k, m, chunk});
         }
         // Increase the diagonal index
         ++k;
@@ -135,36 +133,34 @@ struct Collector : ff_minode_t<Task, bool> {
 struct Worker: ff_node_t<Task, Task> {
     std::vector<double>& M;
     uint64_t N;
-uint64_t col_diag = 0;              // Column index   
-uint64_t row_start = 0;             // Row index
-uint64_t diag_start = 0;            // Row index for the diagonal
-double result = 0.0;
+    uint64_t row_start = 0;             // Row index
+    uint64_t diag_row = 0;            // Row index for the diagonal
+    double result = 0.0;
 
 Worker(std::vector<double>& M, uint64_t N) : M(M), N(N) {}
 
 Task* svc(Task* task) {
-    uint64_t row_idx = task->m;        // Row index
-    const uint64_t diag_idx = task->k; // Diagonal index
+    uint64_t m = task->m;           // Row index
+    const uint64_t k = task->k; // Diagonal index
     const uint task_size = task->task_size; // Number of elements in the diagonal
 
     // Perform the computation for the matrix diagonal element
-    uint64_t end = std::min(N - diag_idx, row_idx + task_size);
+    uint64_t end = std::min(N - k, m + task_size);
 
     // Compute the diagonal for the given task length
-    for (; row_idx < end; ++row_idx) {
-        col_diag = row_idx + diag_idx;
-        row_start = row_idx * N;
-        diag_start = col_diag * N;
+    for (; m < end; ++m) {
+		row_start = m * N;  //index to iterate over the rows
+		diag_row = (m + k) * N;  //row of the diagonal element
 
         result = 0.0;
-        for (uint64_t j = 0; j < diag_idx; ++j) {
+        for (uint64_t j = 0; j < k; ++j) {
             // read the elements from the lower triangular part of the matrix
-            result += M[row_start + (row_idx + j)] * M[diag_start + (col_diag - j)]; // M[m][m+j] * M[m+k][m+k-j]
+            result += M[row_start + (m + j)] * M[diag_row + (m + j + 1)]; // M[m][m+j] * M[m+k][m+k-j]
         }
         // Compute the cube root of the dot product and store the result in the lower triangular part of the matrix
-        M[diag_start + row_idx] = std::cbrt(result); // M[m+k][m]
+        M[diag_row + m] = std::cbrt(result); // M[m+k][m]
         // Copy the result to the upper triangular part of the matrix
-        M[row_start + col_diag] = M[diag_start + row_idx]; // M[m][m+k] = M[m+k][m]
+        M[row_start + (m + k)] = M[diag_row + m]; // M[m][m+k] = M[m+k][m]
     }
     // Send feedback to the emitter to indicate completion
     return task;

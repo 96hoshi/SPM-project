@@ -5,9 +5,6 @@
 #include <ff/ff.hpp>
 #include <ff/parallel_for.hpp>
 
-#include "hpc_helpers.hpp"
-//#include "utils.hpp"
-
 using namespace ff;
 
 
@@ -30,26 +27,40 @@ void printMatrix(const std::vector<double> &M, const uint64_t &N) {
 	}
 }
 
+void parallelwavefront(std::vector<double> &M, const uint64_t &N, const int nw = 4) {
+    ParallelFor pf(nw);
 
-void parallelwavefront(std::vector<double> &M, const uint64_t &N){
-    std::vector<double> v_m, v_mk;
-    ParallelFor pf;
+    double result = 0.0;
+	uint64_t row_start = 0;
+	uint64_t diag_row = 0;
     
     // For each upper diagonal
-    for (uint64_t k = 1; k < N; ++k) { 
-        // Resize vectors
-        v_m.resize(k);
-        v_mk.resize(k);
+    for (uint64_t k = 1; k < N; ++k) {
 
-        // Diagonal level
+        // Diagonal level parallelism
         pf.parallel_for(0, N - k, 1, 0, [&](const long m) {
-            
+            row_start = m * N;  //index to iterate over the rows
+            diag_row = (m + k) * N;  //row of the diagonal element
+
+            result = 0.0;
+
             for (uint64_t j = 0; j < k; ++j) {
-                v_m[j] = M[m * N + (m + j)];
-                v_mk[j] = M[(m + k - j) * N + (m + k)];
+                // read the elements from the lower triangular part of the matrix
+                result += M[row_start + (m + j)] * M[diag_row + (m + j + 1)]; // M[m][m+j] * M[m+k][m+j+1]
             }
-            M[m * N + m + k] = dotProduct(v_m, v_mk);
-        });
+            // Compute the cube root of the dot product and store the result in the lower triangular part of the matrix
+            M[diag_row + m] = std::cbrt(result); // M[m+k][m]
+            // Copy the result to the upper triangular part of the matrix
+            M[row_start + (m + k)] = M[diag_row + m]; // M[m][m+k] = M[m+k][m]
+            }
+        );
+    }
+    	
+	// clear intermedaite results in the lower triangular part of the matrix
+    for (uint64_t i = 0; i < N; ++i) {
+        for (uint64_t j = 0; j < i; ++j) {
+            M[i * N + j] = 0.0;
+        }
     }
 }
 
@@ -79,21 +90,14 @@ int main(int argc, char *argv[]) {
     // TODO: use utils macro
     #ifdef BENCHMARK
         auto a = std::chrono::system_clock::now();
-        parallelwavefront(M, N);
+        parallelwavefront(M, N, nw);
         auto b = std::chrono::system_clock::now();
         std::chrono::duration<double> delta = b-a;
         std::cout << std::fixed << std::setprecision(6) << delta.count() << std::endl;
     #else
-        parallelwavefront(M, N);
+        parallelwavefront(M, N, nw);
         printMatrix(M, N);
     #endif
 
-    // // Parallel computation using FastFlow
-    // TIMERSTART(parallelwavefront)
-    // parallelwavefront(M, N);
-    // TIMERSTOP(parallelwavefront)
-
-    // printMatrix(M, N);
-    
     return 0;
 }

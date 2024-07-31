@@ -6,14 +6,20 @@ if [ $# -lt 2 ]; then
     exit 1
 fi
 
+# Compilation
+cd ../build/
+cmake -DENABLE_BENCHMARK=ON .. >> /dev/null
+make -j 8  >> /dev/null
+cd ../test
+
 # Extract inputs
 test_case=$1
 num_workers=$2
 
 # Define matrix sizes for each test case 
 declare -a case1_sizes=(10 50 100)
-declare -a case2_sizes=(200 500 1000)
-declare -a case3_sizes=(2000 5000 10000)
+declare -a case2_sizes=(128 516 1024)
+declare -a case3_sizes=(2048 5000 10000)
 
 # Output file for all results
 output_file="./results/speedup_summary.txt"
@@ -26,7 +32,7 @@ run_programs() {
     SEQ_TIME=$(../build/sequential_wf $size)
 
     # Run the FastFlow parallel version with specified number of threads and save output
-    # PAR_TIME=$(../build/ff_parallel_wf $size $num_workers)
+    PAR_TIME=$(../build/ff_parallel_wf $size $num_workers)
 
     # Run the FastFlow farm version with specified number of threads and save output
     FARM_TIME=$(../build/ff_farm_wf $size $num_workers)
@@ -35,19 +41,19 @@ run_programs() {
     MPI_TIME=$(mpirun -np $num_workers ../build/mpi_wf $size)
 
     # Calculate the speedup and save results
-    #PAR_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $PAR_TIME" | bc)
+    PAR_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $PAR_TIME" | bc)
     FARM_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $FARM_TIME" | bc)
     MPI_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $MPI_TIME" | bc)
 
     # Append results to output file
     echo "Test$test_case, Matrix Size: $size, #Workers: $num_workers" >> $output_file
     echo "Seq:     $SEQ_TIME s" >> $output_file
-   # echo "FF-Par: $PAR_TIME seconds" >> $output_file
+    echo "FF-Par:  $PAR_TIME s" >> $output_file
     echo "FF-Farm: $FARM_TIME s" >> $output_file
     echo "MPI:     $MPI_TIME s" >> $output_file
-    #echo "c Parallel: $PAR_SPEEDUP" >> $output_file
-    echo "Speedup Farm: $FARM_SPEEDUP" >> $output_file
-    echo "Speedup MPI:  $MPI_SPEEDUP" >> $output_file
+    echo "SP Par : $PAR_SPEEDUP" >> $output_file
+    echo "SP Farm: $FARM_SPEEDUP" >> $output_file
+    echo "SP MPI : $MPI_SPEEDUP" >> $output_file
 
     echo "------------------------------------" >> $output_file
 }

@@ -32,6 +32,7 @@ void printMatrix(const std::vector<double> &M, const uint64_t &N) {
 	}
 }
 
+#ifdef V0
 void wavefront(std::vector<double> &M, const uint64_t &N) {
 	std::vector<double> v_m(1), v_mk(1);
 
@@ -44,13 +45,49 @@ void wavefront(std::vector<double> &M, const uint64_t &N) {
         for (uint64_t m = 0; m < N - k; ++m) {
             for (uint64_t j = 0; j < k; ++j) {
                 v_m[j] = M[m * N + (m + j)]; 			// M[i][i+j]
-                v_mk[j] = M[(m + k - j) * N + (m + k)]; // M[i+k-j][i+k]
+				// column vector to perform the dot product
+                v_mk[k - j - 1] = M[(m + k - j) * N + (m + k)]; // M[i+k-j][i+k]
             }
             // Store the result in the matrix M
             M[m * N + m + k] = dotProduct(v_m, v_mk);   // M[i][i+k]
 		}
 	}
 }
+#else
+//TODO: compare with the row*column product version (1.154813 upper right)
+void wavefront(std::vector<double> &M, const uint64_t &N) {
+	double result = 0.0;
+	uint64_t row_start = 0;
+	uint64_t diag_row = 0;
+
+	for (uint64_t k = 1; k < N; ++k) {
+		
+		for (uint64_t m = 0; m < N - k; ++m) {
+		row_start = m * N;  //index to iterate over the rows
+		diag_row = (m + k) * N;  //row of the diagonal element
+
+		result = 0.0;
+
+		for (uint64_t j = 0; j < k; ++j) {
+			// read the elements from the lower triangular part of the matrix
+			result += M[row_start + (m + j)] * M[diag_row + (m + j + 1)]; // M[m][m+j] * M[m+k][m+j+1]
+		}
+		// Compute the cube root of the dot product and store the result in the lower triangular part of the matrix
+		M[diag_row + m] = std::cbrt(result); // M[m+k][m]
+		// Copy the result to the upper triangular part of the matrix
+		M[row_start + (m + k)] = M[diag_row + m]; // M[m][m+k] = M[m+k][m]
+		}
+	}
+	
+	// clear intermedaite results in the lower triangular part of the matrix
+    for (uint64_t i = 0; i < N; ++i) {
+        for (uint64_t j = 0; j < i; ++j) {
+            M[i * N + j] = 0.0;
+        }
+    }
+}
+#endif
+
 
 int main(int argc, char *argv[]) {
 	int min    = 0;      // default minimum time (in microseconds)

@@ -30,7 +30,7 @@ run_programs() {
     ../build/sequential_wf $size > seq_output.txt
 
     # Run the FastFlow parallel version with specified number of threads
-    #../build/ff_parallel_wf $size $num_workers > par_output.txt
+    ../build/ff_parallel_wf $size $num_workers > par_output.txt
 
     # Run the FastFlow farm version with specified number of threads
     ../build/ff_farm_wf $size $num_workers > farm_output.txt
@@ -40,7 +40,7 @@ run_programs() {
 
     # Compare the output matrices
     echo "Size $size with tolerance 10^-6..."
-    #compare_matrices seq_output.txt par_output.txt "Parallel"
+    compare_matrices seq_output.txt par_output.txt "Parallel"
     compare_matrices seq_output.txt farm_output.txt "Farm"
     compare_matrices seq_output.txt mpi_output.txt "MPI"
     echo "------------------------------------"
