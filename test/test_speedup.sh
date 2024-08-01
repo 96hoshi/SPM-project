@@ -22,7 +22,10 @@ declare -a case2_sizes=(128 516 1024)
 declare -a case3_sizes=(2048 5000 10000)
 
 # Output file for all results
-output_file="./results/speedup_summary.txt"
+output_file="./results/speedup_summary.csv"
+
+# Write the CSV header
+#echo "method,size,#w,#n,on-demand,time,speedup" >> $output_file
 
 # Function to run the programs for a given matrix size and save results to output file
 run_programs() {
@@ -40,22 +43,16 @@ run_programs() {
     # Run the MPI version with specified number of processes and save output
     MPI_TIME=$(mpirun -np $num_workers ../build/mpi_wf $size)
 
-    # Calculate the speedup and save results
+    # Calculate the speedup
     PAR_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $PAR_TIME" | bc)
     FARM_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $FARM_TIME" | bc)
     MPI_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $MPI_TIME" | bc)
 
     # Append results to output file
-    echo "Test$test_case, Matrix Size: $size, #Workers: $num_workers" >> $output_file
-    echo "Seq:     $SEQ_TIME s" >> $output_file
-    echo "FF-Par:  $PAR_TIME s" >> $output_file
-    echo "FF-Farm: $FARM_TIME s" >> $output_file
-    echo "MPI:     $MPI_TIME s" >> $output_file
-    echo "SP Par : $PAR_SPEEDUP" >> $output_file
-    echo "SP Farm: $FARM_SPEEDUP" >> $output_file
-    echo "SP MPI : $MPI_SPEEDUP" >> $output_file
-
-    echo "------------------------------------" >> $output_file
+    echo "seq,$size,1,1,0,$SEQ_TIME,1" >> $output_file
+    echo "par,$size,$num_workers,1,0,$PAR_TIME,$PAR_SPEEDUP" >> $output_file
+    echo "frm,$size,$num_workers,1,0,$FARM_TIME,$FARM_SPEEDUP" >> $output_file
+    echo "mpi,$size,$num_workers,1,0,$MPI_TIME,$MPI_SPEEDUP" >> $output_file
 }
 
 # Determine which test case to run
