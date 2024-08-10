@@ -7,15 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Set the build type
 #set(CMAKE_BUILD_TYPE Release)
-#set(CMAKE_BUILD_TYPE Debug)
-
+set(CMAKE_BUILD_TYPE Debug)
 
 # Define an option to enable or disable benchmarking
 option(ENABLE_BENCHMARK "Enable times benchmarking" OFF)
 option(VERSION_0 "Base version" OFF)
 
 # Set the flags for the different build types
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg -pthread")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -pg -pthread")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O3 -pg -Wall -Wextra -pthread -ftree-vectorizer-verbose=2")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -pthread -DNDEBUG")
 

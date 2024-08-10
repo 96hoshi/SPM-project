@@ -12,7 +12,7 @@ num_workers=$2
 
 # Define matrix sizes for each test case 
 declare -a case1_sizes=(5 10 50)
-declare -a case2_sizes=(200 500 1000)
+declare -a case2_sizes=(128 516 1024)
 declare -a case3_sizes=(2000 5000 10000)
 
 # Compilation
@@ -102,4 +102,4 @@ for size in "${sizes[@]}"; do
 done
 
 # Clean up temporary output files if needed
-rm -f seq_output.txt farm_output.txtv mpi_output.txt
+rm -f seq_output.txt farm_output.txt mpi_output.txt

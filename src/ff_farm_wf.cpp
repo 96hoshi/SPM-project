@@ -41,7 +41,7 @@ struct Emitter: ff_monode_t<bool, Task> {
     Emitter(uint64_t N, int nw) : N(N), nw(nw), k(1){
         // Same chunk size to all workers for static scheduling
         chunk_size = static_cast<uint64_t>(std::ceil(static_cast<double>(N) / nw));
-        chunk_size = std::min(chunk_size, MAX_CHUNK_SIZE);
+        //chunk_size = std::min(chunk_size, MAX_CHUNK_SIZE);
     }
 
     Task* svc(bool* f) {
@@ -63,7 +63,7 @@ struct Emitter: ff_monode_t<bool, Task> {
     }
 };
 
-struct Collector : ff_minode_t<Task, bool> {
+struct Collector: ff_minode_t<Task, bool> {
     uint64_t N;                 // Number of elements in the matrix (NxN)
     uint64_t k;                 // Current diagonal index
     uint feedback_count;        // Number of feedback received
@@ -89,83 +89,38 @@ struct Collector : ff_minode_t<Task, bool> {
     }
 };
 
-// // Worker class to perform tasks
-// struct Worker: ff_node_t<Task, Task> {
-//     std::vector<double>& M;
-//     uint64_t N;
-//     double result = 0.0;
-//     uint64_t mk = 0;                         // Column index   
-//     uint64_t i = 0;                          // Row index
-
-//     Worker(std::vector<double>& M, uint64_t N) : M(M), N(N) {}
-
-//     Task* svc(Task* task) {
-//         uint64_t m = task->m;                    // Row index
-//         const uint64_t k = task->k;              // Diagonal index
-//         const uint task_size = task->task_size;  // Number of elements in the diagonal
-
-
-//         // Perform the computation for the matrix diagonal element
-//         //std::vector<double> v_m(k), v_mk(k);        
-//         uint64_t end = std::min(N - k, m + task_size);
-
-//         // Compute the diagonal for the given task length
-//         for (; m < end; ++m) {
-//             mk = m + k;
-//             i = m * N;
-
-//             result = 0.0;
-//             for (uint64_t j = 0; j < k; ++j) {
-//                 // v_m[j] = M[i + (m + j)];        // M[m][m+j]
-//                 // v_mk[j] = M[(mk - j) * N + mk]; // M[m+k-j][m+k]
-//                 // result += v_m[j] * v_mk[j];
-//                 result += M[i + (m + j)] * M[(mk - j) * N + mk]; // M[m][m+j] * M[m+k-j][m+k]
-//             }
-//             // Compute the cube root of the dot product
-//             M[i + mk] = std::cbrt(result);
-//         }
-//         // Send feedback to the emitter to indicate completion
-//         return task;
-//     }
-// };
-
-// Worker class optimized
 struct Worker: ff_node_t<Task, Task> {
     std::vector<double>& M;
     uint64_t N;
-    uint64_t row_start = 0;             // Row index
+    uint64_t row_start = 0;           // Row index
     uint64_t diag_row = 0;            // Row index for the diagonal
     double result = 0.0;
 
-Worker(std::vector<double>& M, uint64_t N) : M(M), N(N) {}
+    Worker(std::vector<double>& M, uint64_t N) : M(M), N(N) {}
 
-Task* svc(Task* task) {
-    uint64_t m = task->m;           // Row index
-    const uint64_t k = task->k; // Diagonal index
-    const uint task_size = task->task_size; // Number of elements in the diagonal
+    Task* svc(Task* task) {
+        uint64_t m = task->m;                   // Row index
+        const uint64_t k = task->k;             // Diagonal index
+        const uint task_size = task->task_size; // Number of elements in the diagonal
 
-    // Perform the computation for the matrix diagonal element
-    uint64_t end = std::min(N - k, m + task_size);
+        uint64_t end = std::min(N - k, m + task_size);
 
-    // Compute the diagonal for the given task length
-    for (; m < end; ++m) {
-		row_start = m * N;  //index to iterate over the rows
-		diag_row = (m + k) * N;  //row of the diagonal element
+        for (; m < end; ++m) {
+            row_start = m * N;       // index to iterate over the rows
+            diag_row = (m + k) * N;  // row of the diagonal element
 
-        result = 0.0;
-        for (uint64_t j = 0; j < k; ++j) {
-            // read the elements from the lower triangular part of the matrix
-            result += M[row_start + (m + j)] * M[diag_row + (m + j + 1)]; // M[m][m+j] * M[m+k][m+k-j]
+            result = 0.0;
+            for (uint64_t j = 0; j < k; ++j) {
+                // read the elements from the lower triangular part of the matrix
+                result += M[row_start + (m + j)] * M[diag_row + (m + j + 1)]; // M[m][m+j] * M[m+k][m+k-j]
+            }
+            // Compute the cube root of the dot product and store the result in the lower triangular part of the matrix
+            M[diag_row + m] = std::cbrt(result); // M[m+k][m]
+            // Copy the result to the upper triangular part of the matrix
+            M[row_start + (m + k)] = M[diag_row + m]; // M[m][m+k] = M[m+k][m]
         }
-        // Compute the cube root of the dot product and store the result in the lower triangular part of the matrix
-        M[diag_row + m] = std::cbrt(result); // M[m+k][m]
-        // Copy the result to the upper triangular part of the matrix
-        M[row_start + (m + k)] = M[diag_row + m]; // M[m][m+k] = M[m+k][m]
+        return task;
     }
-    // Send feedback to the emitter to indicate completion
-    return task;
-    }
-
 };
 
 // Function to perform wavefront
@@ -177,14 +132,14 @@ int farm_wavefront(std::vector<double>& M, const uint64_t& N, const int nw) {
         workers.push_back(make_unique<Worker>(M, N));
     }
 
-    // Create farm
     ff_Farm<std::pair<int, int>> farm(std::move(workers));
     Emitter emitter(N, nw);
     Collector collector(N);
+
     farm.add_emitter(emitter);
     farm.add_collector(collector);
     farm.wrap_around();
-    // farm.set_scheduling_ondemand(); 
+    //farm.set_scheduling_ondemand(); 
 
     if (farm.run_and_wait_end() < 0) {
         error("running farm");
@@ -196,6 +151,7 @@ int farm_wavefront(std::vector<double>& M, const uint64_t& N, const int nw) {
             M[i * N + j] = 0.0;
         }
     }
+
     return 0;
 }
 
@@ -232,7 +188,6 @@ int main(int argc, char *argv[]) {
         M[i * N + i ] = static_cast<double>(i + 1) / N;
     }
 
-    // TODO: use utils macro
     #ifdef BENCHMARK
         auto a = std::chrono::system_clock::now();
         farm_wavefront(M, N, nw);

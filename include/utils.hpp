@@ -3,7 +3,17 @@
 
 #include <vector>
 #include <cstdint>
+#include <chrono>
 
+
+#define STARTBENCHMARK(label)                                               \
+    std::chrono::time_point<std::chrono::system_clock> a##label, b##label;  \
+    a##label = std::chrono::system_clock::now();
+
+#define STOPBENCHMARK(label)                                       \
+    b##label = std::chrono::system_clock::now();                     \
+    std::chrono::duration<double> delta##label = b##label-a##label;  \
+    std::cout << delta.count() << std::endl;
 
 // Perform dot product
 template <typename T>
