@@ -61,13 +61,19 @@ int main(int argc, char** argv) {
 
         std::vector<double> local_results(end_row - start_row, 0.0);
 
-        // TODO: fix dot product computation
-        for (int i = start_row; i < end_row; ++i) {
+        for (int m = start_row; m < end_row; ++m) {
+            int row_start = m * N;        //index to iterate over the rows
+            int diag_row = (m + k) * N;  //row of the diagonal element
+
+            local_results[m - start_row] = 0.0;
+
             for (int j = 0; j < k; ++j) {
-                local_results[i - start_row] += M[i * N + i + j ] * M[(i + k - j) * N + i + k];
+                // read the elements from the lower triangular part of the matrix
+                local_results[m - start_row] += M[row_start + (m + j)] * M[diag_row + (m + j + 1)]; // M[m][m+j] * M[m+k][m+j+1]
             }
-            local_results[i - start_row] = std::cbrt(local_results[i - start_row]);
-         }
+            // Compute the cube root of the dot product and store the result in the lower triangular part of the matrix
+            local_results[m - start_row] = std::cbrt(local_results[m - start_row]); // M[m+k][m]
+        }
 
         // Gather results at the root process
         if (rank == 0) {
@@ -86,18 +92,23 @@ int main(int argc, char** argv) {
             MPI_Gatherv(local_results.data(), local_results.size(), MPI_DOUBLE, gathered_results.data(), recv_counts.data(), displs.data(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
             // Update the matrix with the gathered results
-            for (int i = 0; i < N - k; ++i) {
-                M[i * N + (i + k)] = gathered_results[i];
+            for (int m = 0; m < N - k; ++m) {
+                int row_start = m * N;  //index to iterate over the rows
+                int diag_row = (m + k) * N;  //row of the diagonal element
+
+                // Store the result in the lower triangular part of the matrix
+                M[diag_row + m] = gathered_results[m]; // M[m+k][m]
+                // Copy the result to the upper triangular part of the matrix
+                M[row_start + (m + k)] = M[diag_row + m]; // M[m][m+k] = M[m+k][m]
             }
         } else {
             // Send the results to the root process
             MPI_Gatherv(local_results.data(), local_results.size(), MPI_DOUBLE, nullptr, nullptr, nullptr, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
         }
-        // TODO: use Scatterv
+
         // Broadcast updated matrix for next iteration
         MPI_Bcast(M.data(), mat_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    }
+    } // end of for k
     
     // Print the final matrix
     if (rank == 0) {    
@@ -106,7 +117,13 @@ int main(int argc, char** argv) {
 
         #ifdef BENCHMARK
         std::printf("%f\n", end_time - start_time);
-        # else 
+        # else
+        // Clear the lower triangular part of the matrix
+        for (int i = 0; i < N; ++i) {
+            for (int j = 0; j < i; ++j) {
+                M[i * N + j] = 0.0;
+            }
+        }
             for (int i = 0; i < N; ++i) {
                 for (int j = 0; j < N; ++j) {
                     std::printf("%f ", M[i * N + j]);

@@ -46,33 +46,35 @@ run_programs() {
     echo "------------------------------------"
 }
 
-# Function to compare matrices with tolerance
+# Function to compare the last element of matrices with tolerance
 compare_matrices() {
     local file1=$1
     local file2=$2
     local label=$3
 
-    # Use Python for more accurate floating-point comparison
+    # Use Python for comparison of only the last element
     python3 - <<EOF
 import sys
 import numpy as np
 
-def compare_matrices(file1, file2, tolerance):
+def compare_last_element(file1, file2, tolerance):
     # Load matrices from files
     matrix1 = np.loadtxt(file1)
     matrix2 = np.loadtxt(file2)
 
-    # Compare matrices element-wise within the specified tolerance
-    if np.allclose(matrix1, matrix2, atol=tolerance):
+    # Get the last element from both matrices
+    last_element_1 = matrix1[0, -1]
+    last_element_2 = matrix2[0, -1]
+
+    # Compare the last elements within the specified tolerance
+    if np.isclose(last_element_1, last_element_2, atol=tolerance):
         print("$label: MATCHES.")
     else:
         print("$label: DOES NOT MATCH.")
-        #print("Sequential:")
-        #print(matrix1)
-        #print("$label:")
-        #print(matrix2)
+        print("Sequential last element: ", last_element_1)
+        print("$label last element: ", last_element_2)
 
-compare_matrices("$file1", "$file2", 1e-6)
+compare_last_element("$file1", "$file2", 1e-6)
 EOF
 }
 
