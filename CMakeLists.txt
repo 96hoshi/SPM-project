@@ -43,4 +43,5 @@ target_include_directories(ff_farm_wf PRIVATE ${FF_ROOT} include)
 
 # Link MPI
 find_package(MPI REQUIRED)
+target_include_directories(mpi_wf PRIVATE ${MPI_CXX_INCLUDE_PATH})
 target_link_libraries(mpi_wf ${MPI_CXX_LIBRARIES})

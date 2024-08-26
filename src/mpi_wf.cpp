@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
 
         for (int m = start_row; m < end_row; ++m) {
             int row_start = m * N;        //index to iterate over the rows
-            int diag_row = (m + k) * N;  //row of the diagonal element
+            int diag_row = (m + k) * N;   //row of the diagonal element
 
             local_results[m - start_row] = 0.0;
 
@@ -93,8 +93,8 @@ int main(int argc, char** argv) {
 
             // Update the matrix with the gathered results
             for (int m = 0; m < N - k; ++m) {
-                int row_start = m * N;  //index to iterate over the rows
-                int diag_row = (m + k) * N;  //row of the diagonal element
+                int row_start = m * N;  
+                int diag_row = (m + k) * N;
 
                 // Store the result in the lower triangular part of the matrix
                 M[diag_row + m] = gathered_results[m]; // M[m+k][m]
@@ -107,30 +107,31 @@ int main(int argc, char** argv) {
         }
 
         // Broadcast updated matrix for next iteration
+        // TODO: use scatterv to send only the correct part of the matrix instead of the whole matrix
         MPI_Bcast(M.data(), mat_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    } // end of for k
+    }
     
     // Print the final matrix
     if (rank == 0) {    
         // stop timer
         double end_time = MPI_Wtime();
 
-        #ifdef BENCHMARK
+        //#ifdef BENCHMARK
         std::printf("%f\n", end_time - start_time);
-        # else
-        // Clear the lower triangular part of the matrix
+        //# else
+        // Clear the lower triangular matrix
         for (int i = 0; i < N; ++i) {
             for (int j = 0; j < i; ++j) {
                 M[i * N + j] = 0.0;
             }
         }
-            for (int i = 0; i < N; ++i) {
-                for (int j = 0; j < N; ++j) {
-                    std::printf("%f ", M[i * N + j]);
-                }
-                std::printf("\n");
+        for (int i = 0; i < N; ++i) {
+            for (int j = 0; j < N; ++j) {
+                std::printf("%f ", M[i * N + j]);
             }
-        #endif
+            std::printf("\n");
+        }
+        //#endif
     }
 
     MPI_Finalize();
