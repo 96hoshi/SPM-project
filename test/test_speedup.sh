@@ -25,7 +25,7 @@ declare -a final_sizes=(128 516 1000 1001 1024 2048 4096 8192 16384)
 declare -a workers=(4 8 16 32)
 
 # Output file for all results
-output_file="./results/speedup_summary04.csv"
+output_file="./results/speedup_summary.csv"
 
 # Write the CSV header
 # echo "method,size,#w,#n,on-demand,time,speedup" >> $output_file

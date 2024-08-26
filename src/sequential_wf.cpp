@@ -7,9 +7,6 @@
 #include <random>
 #include <cassert>
 #include <chrono>
-
-#include "hpc_helpers.hpp"
-//#include "utils.hpp"
 		
 
 // Function to perform dot product
