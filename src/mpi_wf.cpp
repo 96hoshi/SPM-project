@@ -12,7 +12,7 @@ int main(int argc, char** argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    int N = 5;
+    int N = 1024;
 
     if (argc < 2) {
         if (rank == 0) {
@@ -32,11 +32,11 @@ int main(int argc, char** argv) {
         MPI_Finalize();
         return -1;
     }
-    // TODO: add check if N is too big for a certain treshold, save the matrix in a file and read it in the root process
+    // TODO: add check if N is too big for a certain treshold, save the matrix in a file and read it in the root process FUTURE WORKS
 
     double start_time = 0;
     int mat_size = N * N;
-    std::vector<double> M(N * N, 0.0);
+    std::vector<double> M(mat_size, 0.0);
 
     // Initialize matrix in the root process
     if (rank == 0) {
@@ -68,10 +68,8 @@ int main(int argc, char** argv) {
             local_results[m - start_row] = 0.0;
 
             for (int j = 0; j < k; ++j) {
-                // read the elements from the lower triangular part of the matrix
                 local_results[m - start_row] += M[row_start + (m + j)] * M[diag_row + (m + j + 1)]; // M[m][m+j] * M[m+k][m+j+1]
             }
-            // Compute the cube root of the dot product and store the result in the lower triangular part of the matrix
             local_results[m - start_row] = std::cbrt(local_results[m - start_row]); // M[m+k][m]
         }
 
@@ -116,22 +114,25 @@ int main(int argc, char** argv) {
         // stop timer
         double end_time = MPI_Wtime();
 
-        //#ifdef BENCHMARK
-        std::printf("%f\n", end_time - start_time);
-        //# else
-        // Clear the lower triangular matrix
-        for (int i = 0; i < N; ++i) {
-            for (int j = 0; j < i; ++j) {
-                M[i * N + j] = 0.0;
+        #ifdef BENCHMARK
+            std::printf("%f\n", end_time - start_time);
+        #else
+            // Clear the lower triangular matrix
+            for (int i = 0; i < N; ++i) {
+                for (int j = 0; j < i; ++j) {
+                    M[i * N + j] = 0.0;
+                }
             }
-        }
-        for (int i = 0; i < N; ++i) {
-            for (int j = 0; j < N; ++j) {
-                std::printf("%f ", M[i * N + j]);
-            }
-            std::printf("\n");
-        }
-        //#endif
+            // for (int i = 0; i < N; ++i) {
+            //     for (int j = 0; j < N; ++j) {
+            //         std::printf("%f ", M[i * N + j]);
+            //     }
+            //     std::printf("\n");
+            // }
+
+            // correctness check: if the upper right element of the matrix is correct
+            std::cout << M[N - 1] << std::endl;
+        #endif
     }
 
     MPI_Finalize();

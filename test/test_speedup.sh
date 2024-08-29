@@ -7,10 +7,12 @@ if [ $# -lt 1 ]; then
 fi
 
 # Compilation
+rm -rf build
+mkdir build
 cd ../build/
 cmake -DENABLE_BENCHMARK=ON .. >> /dev/null
 make -j 8  >> /dev/null
-cd ../test
+cd ../test/
 
 # Extract inputs
 test_case=$1
@@ -25,7 +27,7 @@ declare -a final_sizes=(128 516 1000 1001 1024 2048 4096 8192 16384)
 declare -a workers=(4 8 16 32)
 
 # Output file for all results
-output_file="./results/speedup_summary.csv"
+output_file="./results/speedup"
 
 # Write the CSV header
 # echo "method,size,#w,#n,on-demand,time,speedup" >> $output_file
@@ -38,13 +40,10 @@ run_programs() {
     SEQ_TIME=$(../build/sequential_wf $size)
 
     # Record the sequential time in the output file
-    echo "seq,$size,1,1,0,$SEQ_TIME,1" >> $output_file
+    echo "seq,$size,1,1,0,$SEQ_TIME,1" >> $output_file_$size.csv
 
     # Iterate over the number of workers for parallel and farm versions
     for num_workers in "${workers[@]}"; do
-        # Run the FastFlow parallel version with specified number of threads and save output
-        # PAR_TIME=$(../build/ff_parallel_wf $size $num_workers)
-
         # Run the FastFlow farm version with specified number of threads and save output
         FARM_TIME=$(../build/ff_farm_wf $size $num_workers)
 
@@ -52,14 +51,12 @@ run_programs() {
         MPI_TIME=$(mpirun -np 6 ../build/mpi_wf $size)
 
         # Calculate the speedup
-        #PAR_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $PAR_TIME" | bc)
         FARM_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $FARM_TIME" | bc)
         MPI_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $MPI_TIME" | bc)
 
         # Append results to output file
-        #echo "par,$size,$num_workers,1,1,$PAR_TIME,$PAR_SPEEDUP" >> $output_file
-        echo "frm,$size,$num_workers,1,1,$FARM_TIME,$FARM_SPEEDUP" >> $output_file
-        echo "mpi,$size,$num_workers,1,1,$MPI_TIME,$MPI_SPEEDUP" >> $output_file
+        echo "frm,$size,$num_workers,1,1,$FARM_TIME,$FARM_SPEEDUP" >> $output_file_$size.csv
+        echo "mpi,$size,$num_workers,1,1,$MPI_TIME,$MPI_SPEEDUP" >> $output_file_$size.csv
     done
 }
 

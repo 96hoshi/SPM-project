@@ -199,7 +199,8 @@ int main(int argc, char *argv[]) {
             error("running farm_wavefront");
             return -1;
         }
-        printMatrix(M, N);
+        //printMatrix(M, N);
+        std::cout << M[N - 1] << std::endl;
     #endif
 
     return 0;

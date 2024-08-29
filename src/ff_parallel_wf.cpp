@@ -39,6 +39,7 @@ void parallelwavefront(std::vector<double> &M, const uint64_t &N, const int nw) 
                 // read the elements from the lower triangular part of the matrix
                 result += M[row_start + (m + j)] * M[diag_row + (m + j + 1)]; // M[m][m+j] * M[m+k][m+j+1]
             }
+            
             // Store the result in the lower triangular part of the matrix
             M[diag_row + m] = std::cbrt(result); // M[m+k][m]
             // Copy the result to the upper triangular part of the matrix
