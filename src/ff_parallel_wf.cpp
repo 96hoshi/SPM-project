@@ -8,15 +8,6 @@
 using namespace ff;
 
 
-// Function to perform cube root of dot product
-double dotProduct(const std::vector<double>& v1, const std::vector<double>& v2) {
-    double result = 0.0;
-    for(size_t i = 0; i < v1.size(); ++i) {
-        result += v1[i] * v2[i];
-    }
-    return std::cbrt(result);;
-}
-
 // Print the matrix
 void printMatrix(const std::vector<double> &M, const uint64_t &N) {
 	for(uint64_t i = 0; i < N; ++i) {
@@ -27,7 +18,7 @@ void printMatrix(const std::vector<double> &M, const uint64_t &N) {
 	}
 }
 
-void parallelwavefront(std::vector<double> &M, const uint64_t &N, const int nw = 4) {
+void parallelwavefront(std::vector<double> &M, const uint64_t &N, const int nw) {
     ParallelFor pf(nw);
 
     double result = 0.0;
@@ -48,12 +39,12 @@ void parallelwavefront(std::vector<double> &M, const uint64_t &N, const int nw =
                 // read the elements from the lower triangular part of the matrix
                 result += M[row_start + (m + j)] * M[diag_row + (m + j + 1)]; // M[m][m+j] * M[m+k][m+j+1]
             }
-            // Compute the cube root of the dot product and store the result in the lower triangular part of the matrix
+            
+            // Store the result in the lower triangular part of the matrix
             M[diag_row + m] = std::cbrt(result); // M[m+k][m]
             // Copy the result to the upper triangular part of the matrix
             M[row_start + (m + k)] = M[diag_row + m]; // M[m][m+k] = M[m+k][m]
-            }
-        );
+        });
     }
     	
 	// clear intermedaite results in the lower triangular part of the matrix
@@ -87,7 +78,6 @@ int main(int argc, char *argv[]) {
         M[i * N + i] = static_cast<double>(i + 1) / N;
     }
     
-    // TODO: use utils macro
     #ifdef BENCHMARK
         auto a = std::chrono::system_clock::now();
         parallelwavefront(M, N, nw);

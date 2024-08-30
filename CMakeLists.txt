@@ -6,71 +6,40 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Set the build type
-#set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_BUILD_TYPE Release)
 #set(CMAKE_BUILD_TYPE Debug)
 
-
-# Define an option to enable or disable benchmarking
+# Define options
 option(ENABLE_BENCHMARK "Enable times benchmarking" OFF)
-option(VERSION_0 "Base version" OFF)
 
-# Set the flags for the different build types
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg -pthread")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O3 -pg -Wall -Wextra -pthread -ftree-vectorizer-verbose=2")
+# Set the flags for different build types
+set(CMAKE_CXX_FLAGS "-O3 -pg -pthread")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -Wall -Wextra -ftree-vectorizer-verbose=2")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -pthread -DNDEBUG")
 
-# Add the preprocessor definition for the benchmarking
+# Add preprocessor definitions based on options
 if(ENABLE_BENCHMARK)
-    add_definitions(-DBENCHMARK)
+    add_compile_definitions(BENCHMARK)
 endif()
 
-# Add the preprocessor definition for the version 1
-if(VERSION_0)
-    add_definitions(-DV0)
-endif()
-
-# Check if FF_ROOT is defined in the environment, otherwise set it to a default path
-if(NOT DEFINED ENV{FF_ROOT})
+# Determine FF_ROOT
+set(FF_ROOT "$ENV{FF_ROOT}")
+if(NOT FF_ROOT)
     set(FF_ROOT "$ENV{HOME}/include/fastflow")
-else()
-    set(FF_ROOT "$ENV{FF_ROOT}")
 endif()
 
-# Source files for sequential target
-set(SEQ_SOURCES
-    src/sequential_wf.cpp
-)
+# Source files for targets
+set(SEQ_SOURCES src/sequential_wf.cpp)
+set(FFF_SOURCES src/ff_farm_wf.cpp)
+set(MPI_SOURCES src/mpi_wf.cpp)
 
-# Source files for FastFlow target
-set(FFP_SOURCES
-    src/ff_parallel_wf.cpp
-)
-
-# Source files for FastFlow target
-set(FFF_SOURCES
-    src/ff_farm_wf.cpp
-)
-
-# Source files for MPI target
-set(MPI_SOURCES
-    src/mpi_wf.cpp
-)
-
-# Add executable for sequential target 
+# Add executables without target_include_directories
 add_executable(sequential_wf ${SEQ_SOURCES})
-target_include_directories(sequential_wf PRIVATE include)
-
-# Add executable for FastFlow target
-add_executable(ff_parallel_wf ${FFP_SOURCES})
-target_include_directories(ff_parallel_wf PRIVATE ${FF_ROOT} include)
-
-# Add executable for FastFlow target
 add_executable(ff_farm_wf ${FFF_SOURCES})
-target_include_directories(ff_farm_wf PRIVATE ${FF_ROOT} include)
-
-# Add executable for MPI target
 add_executable(mpi_wf ${MPI_SOURCES})
-target_include_directories(mpi_wf PRIVATE include)
+
+# Add include directories
+target_include_directories(ff_farm_wf PRIVATE ${FF_ROOT} include)
 
 # Link MPI
 find_package(MPI REQUIRED)

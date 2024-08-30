@@ -42,3 +42,6 @@ results/
 
 # Visual Studio Code
 .vscode
+
+#venv
+venv/

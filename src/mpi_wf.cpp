@@ -1,22 +1,9 @@
 #include <iostream>
+#include <cstdint>
 #include <vector>
 #include <cmath>
 #include <mpi.h>
-#include <cstdint>
 
-// Function to compute dot product of two arrays
-double compute_dot_product(const std::vector<double> arr1, const std::vector<double> arr2, int size) {
-    double dot_product = 0.0;
-    for (int i = 0; i < size; ++i) {
-        dot_product += arr1[i] * arr2[i];
-    }
-    return dot_product;
-}
-
-// Function to compute cubic root
-double compute_cubic_root(double value) {
-    return cbrt(value);
-}
 
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
@@ -25,7 +12,7 @@ int main(int argc, char** argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    int N = 5;
+    int N = 1024;
 
     if (argc < 2) {
         if (rank == 0) {
@@ -37,7 +24,6 @@ int main(int argc, char** argv) {
     } else {
         N = std::stol(argv[1]);
     }
-
     // Check the size of the matrix
     if (N < 1) {
         if (rank == 0) {
@@ -46,22 +32,24 @@ int main(int argc, char** argv) {
         MPI_Finalize();
         return -1;
     }
+    // TODO: add check if N is too big for a certain treshold, save the matrix in a file and read it in the root process FUTURE WORKS
 
     double start_time = 0;
     int mat_size = N * N;
-    std::vector<double> matrix(N * N, 0.0);
+    std::vector<double> M(mat_size, 0.0);
 
     // Initialize matrix in the root process
     if (rank == 0) {
         for (int i = 0; i < N; ++i) {
-            matrix[i * N + i] = static_cast<double>(i + 1) / N;
+            M[i * N + i] = static_cast<double>(i + 1) / N;
         }
        start_time = MPI_Wtime();
     }
 
     // TODO: use scatterv
+    // TODO: do not send them matrix but only send the corect partial diagonal to each processor
     // Broadcast matrix to all processes
-    MPI_Bcast(matrix.data(), mat_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(M.data(), mat_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     // Process each diagonal element
     for (int k = 1; k < N; ++k) {
@@ -73,14 +61,17 @@ int main(int argc, char** argv) {
 
         std::vector<double> local_results(end_row - start_row, 0.0);
 
-        // TODO: use Reudce
-        for (int i = start_row; i < end_row; ++i) {
-            // read colums per each process
+        for (int m = start_row; m < end_row; ++m) {
+            int row_start = m * N;        //index to iterate over the rows
+            int diag_row = (m + k) * N;   //row of the diagonal element
+
+            local_results[m - start_row] = 0.0;
+
             for (int j = 0; j < k; ++j) {
-                local_results[i - start_row] += matrix[i * N + i + j ] * matrix[(i + k - j) * N + i + k];
+                local_results[m - start_row] += M[row_start + (m + j)] * M[diag_row + (m + j + 1)]; // M[m][m+j] * M[m+k][m+j+1]
             }
-            local_results[i - start_row] = compute_cubic_root(local_results[i - start_row]);
-         }
+            local_results[m - start_row] = std::cbrt(local_results[m - start_row]); // M[m+k][m]
+        }
 
         // Gather results at the root process
         if (rank == 0) {
@@ -99,16 +90,23 @@ int main(int argc, char** argv) {
             MPI_Gatherv(local_results.data(), local_results.size(), MPI_DOUBLE, gathered_results.data(), recv_counts.data(), displs.data(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
             // Update the matrix with the gathered results
-            for (int i = 0; i < N - k; ++i) {
-                matrix[i * N + (i + k)] = gathered_results[i];
+            for (int m = 0; m < N - k; ++m) {
+                int row_start = m * N;  
+                int diag_row = (m + k) * N;
+
+                // Store the result in the lower triangular part of the matrix
+                M[diag_row + m] = gathered_results[m]; // M[m+k][m]
+                // Copy the result to the upper triangular part of the matrix
+                M[row_start + (m + k)] = M[diag_row + m]; // M[m][m+k] = M[m+k][m]
             }
         } else {
             // Send the results to the root process
             MPI_Gatherv(local_results.data(), local_results.size(), MPI_DOUBLE, nullptr, nullptr, nullptr, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
         }
+
         // Broadcast updated matrix for next iteration
-        MPI_Bcast(matrix.data(), mat_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        // TODO: use scatterv to send only the correct part of the matrix instead of the whole matrix
+        MPI_Bcast(M.data(), mat_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     }
     
     // Print the final matrix
@@ -117,15 +115,23 @@ int main(int argc, char** argv) {
         double end_time = MPI_Wtime();
 
         #ifdef BENCHMARK
-        std::printf("%f\n", end_time - start_time);
-        # else 
-            //std::printf("Final matrix:\n");
+            std::printf("%f\n", end_time - start_time);
+        #else
+            // Clear the lower triangular matrix
             for (int i = 0; i < N; ++i) {
-                for (int j = 0; j < N; ++j) {
-                    std::printf("%f ", matrix[i * N + j]);
+                for (int j = 0; j < i; ++j) {
+                    M[i * N + j] = 0.0;
                 }
-                std::printf("\n");
             }
+            // for (int i = 0; i < N; ++i) {
+            //     for (int j = 0; j < N; ++j) {
+            //         std::printf("%f ", M[i * N + j]);
+            //     }
+            //     std::printf("\n");
+            // }
+
+            // correctness check: if the upper right element of the matrix is correct
+            std::cout << M[N - 1] << std::endl;
         #endif
     }
 

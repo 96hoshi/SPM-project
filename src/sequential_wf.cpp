@@ -7,9 +7,6 @@
 #include <random>
 #include <cassert>
 #include <chrono>
-
-#include "hpc_helpers.hpp"
-//#include "utils.hpp"
 		
 
 // Function to perform dot product
@@ -117,7 +114,6 @@ int main(int argc, char *argv[]) {
         M[i * N + i] = static_cast<double>(i + 1) / N;
     }
 
-	// TODO: use utils macro
 	#ifdef BENCHMARK
 		auto a = std::chrono::system_clock::now();
 		wavefront(M, N);
@@ -126,13 +122,8 @@ int main(int argc, char *argv[]) {
 		std::cout << std::fixed << std::setprecision(6) << delta.count() << std::endl;
 	#else
 		wavefront(M, N); 
-		printMatrix(M, N);
+		std::cout << M[N - 1] << std::endl;
 	#endif
-
-	// TIMERSTART(wavefront);
-	// wavefront(M, N); 
-	// TIMERSTOP(wavefront);
-	// printMatrix(M, N);
 
     return 0;
 }
