@@ -31,15 +31,18 @@ endif()
 # Source files for targets
 set(SEQ_SOURCES src/sequential_wf.cpp)
 set(FFF_SOURCES src/ff_farm_wf.cpp)
+set(FFP_SOURCES src/ff_parallel_wf.cpp)
 set(MPI_SOURCES src/mpi_wf.cpp)
 
 # Add executables without target_include_directories
 add_executable(sequential_wf ${SEQ_SOURCES})
 add_executable(ff_farm_wf ${FFF_SOURCES})
+add_executable(ff_parallel_wf ${FFP_SOURCES})
 add_executable(mpi_wf ${MPI_SOURCES})
 
 # Add include directories
 target_include_directories(ff_farm_wf PRIVATE ${FF_ROOT} include)
+target_include_directories(ff_parallel_wf PRIVATE ${FF_ROOT} include)
 
 # Link MPI
 find_package(MPI REQUIRED)

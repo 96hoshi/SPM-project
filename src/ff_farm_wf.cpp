@@ -32,30 +32,37 @@ struct Task {
 };
 
 // Emitter class to distribute tasks
-struct Emitter: ff_monode_t<bool, Task> {
+struct Emitter: ff_monode_t<uint, Task> {
     uint64_t N;         // Number of elements in the matrix (NxN)
     uint64_t k;         // Current diagonal index
     uint nw;            // Number of workers
     int chunk_size;     // Number of elements in the diagonal for each worker
+    uint feedback_count;// Number of feedback received
 
-    Emitter(uint64_t N, int nw) : N(N), nw(nw), k(1){
+
+    Emitter(uint64_t N, int nw) : N(N), nw(nw), k(1), feedback_count(0) {
         // Same chunk size to all workers for static scheduling
-        chunk_size = static_cast<uint64_t>(std::ceil(static_cast<double>(N) / nw));
-        //chunk_size = std::min(chunk_size, MAX_CHUNK_SIZE);
+        //chunk_size = static_cast<uint64_t>(std::ceil(static_cast<double>(N) / nw));
+        chunk_size = 1;
     }
 
-    Task* svc(bool* f) {
-        if (f != nullptr && *f) {
-            // The diagonal is completed
-            delete f;
+    Task* svc(uint* task_size) {
+        if (task_size != nullptr && *task_size) {
+            // Receive feedback from workers
+            feedback_count += *task_size;
+            delete task_size;
+        } 
+        if (feedback_count == N - k) {
+            feedback_count = 0;
+            ++k;
         }
-        for (uint64_t m = 0; m < (N - k); m += chunk_size) {
-            uint chunk = std::min(chunk_size, static_cast<int>(N - k - m));
-            ff_send_out(new Task{k, m, chunk});
+        if(feedback_count == 0){
+            // Send tasks to workers
+            for (uint64_t m = 0; m < (N - k); m += chunk_size) {
+                uint chunk = std::min(chunk_size, static_cast<int>(N - k - m));
+                ff_send_out(new Task{k, m, chunk});
+            }
         }
-        // Increase the diagonal index
-        ++k;
-        
         if (k == N) {
             return EOS;
         }
@@ -63,33 +70,7 @@ struct Emitter: ff_monode_t<bool, Task> {
     }
 };
 
-struct Collector: ff_minode_t<Task, bool> {
-    uint64_t N;                 // Number of elements in the matrix (NxN)
-    uint64_t k;                 // Current diagonal index
-    uint feedback_count;        // Number of feedback received
-
-    Collector(uint64_t N) : N(N), feedback_count(0), k(1) {}
-
-    bool* svc(Task* task) {
-        if (task == nullptr) {
-            return GO_ON;
-        }
-        // Receive feedback from workers
-        feedback_count += task->task_size;
-
-        if (feedback_count == N - k) {
-            feedback_count = 0;
-            ++k;
-            // Send signal to the emitter
-            bool* done = new bool(true);
-            ff_send_out(done);
-        }
-        delete task;
-        return GO_ON;
-    }
-};
-
-struct Worker: ff_node_t<Task, Task> {
+struct Worker: ff_node_t<Task, uint> {
     std::vector<double>& M;
     uint64_t N;
     uint64_t row_start = 0;           // Row index
@@ -98,7 +79,7 @@ struct Worker: ff_node_t<Task, Task> {
 
     Worker(std::vector<double>& M, uint64_t N) : M(M), N(N) {}
 
-    Task* svc(Task* task) {
+    uint* svc(Task* task) {
         uint64_t m = task->m;                   // Row index
         const uint64_t k = task->k;             // Diagonal index
         const uint task_size = task->task_size; // Number of elements in the diagonal
@@ -119,12 +100,13 @@ struct Worker: ff_node_t<Task, Task> {
             // Copy the result to the upper triangular part of the matrix
             M[row_start + (m + k)] = M[diag_row + m]; // M[m][m+k] = M[m+k][m]
         }
-        return task;
+        uint* size = new uint(task_size);
+        return size;
     }
 };
 
 // Function to perform wavefront
-int farm_wavefront(std::vector<double>& M, const uint64_t& N, const int nw) {
+int farm_wavefront(std::vector<double>& M, const uint64_t& N, const int nw, const int on_demand) {
     std::vector<std::unique_ptr<ff_node>> workers;
     
     // Create workers
@@ -134,12 +116,13 @@ int farm_wavefront(std::vector<double>& M, const uint64_t& N, const int nw) {
 
     ff_Farm<std::pair<int, int>> farm(std::move(workers));
     Emitter emitter(N, nw);
-    Collector collector(N);
 
     farm.add_emitter(emitter);
-    farm.add_collector(collector);
+    farm.remove_collector();
     farm.wrap_around();
-    //farm.set_scheduling_ondemand(); 
+    if(on_demand == 1) {
+        farm.set_scheduling_ondemand();
+    }
 
     if (farm.run_and_wait_end() < 0) {
         error("running farm");
@@ -159,16 +142,19 @@ int farm_wavefront(std::vector<double>& M, const uint64_t& N, const int nw) {
 int main(int argc, char *argv[]) {
     uint64_t N = 516;    // default size of the matrix (NxN)
     uint64_t nw = 4;     // default number of workers
+    int on_demand = 0;   // on-demand scheduling
 
-    if (argc != 2 && argc != 3) {
+    if (argc != 2 && argc != 3 && argc != 4) {
 		std::printf("use: %s N nw\n", argv[0]);
 		std::printf("     N size of the square matrix\n");
         std::printf("     nw number of workers\n");
+        std::printf("     on-nemand 0 for not enabled, 1 for enalbed\n");
 		return -1;
 	}
 	if (argc > 2) {
 		N = std::stol(argv[1]);
         nw = std::stoi(argv[2]);
+        on_demand = std::stoi(argv[3]);
 	}
 
     // Check the size of the matrix
@@ -190,12 +176,12 @@ int main(int argc, char *argv[]) {
 
     #ifdef BENCHMARK
         auto a = std::chrono::system_clock::now();
-        farm_wavefront(M, N, nw);
+        farm_wavefront(M, N, nw, on_demand);
         auto b = std::chrono::system_clock::now();
         std::chrono::duration<double> delta = b-a;
         std::cout << std::fixed << std::setprecision(6) << delta.count() << std::endl;
     #else
-        if(farm_wavefront(M, N, nw) < 0) {
+        if(farm_wavefront(M, N, nw, on_demand) < 0) {
             error("running farm_wavefront");
             return -1;
         }
