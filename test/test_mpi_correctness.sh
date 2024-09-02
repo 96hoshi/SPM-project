@@ -8,8 +8,8 @@
 
 
 # Compilation
-rm -rf build
-mkdir build
+rm -rf ../build
+mkdir ../build
 cd ../build/
 cmake -DENABLE_BENCHMARK=OFF .. 
 make -j 8 
@@ -19,23 +19,13 @@ cd ../test/
 path_results="./results/correctness/"
 
 # Number of execution of the program
-num_execution=3
+num_execution=2
 start_val=1024 #from 1024 to 8192
 for i in $(seq 0 $((num_execution-1)))
 do
   arg=$((start_val * (2 ** i)))
   echo "MPI execution 1 task per node, 4 nodes, with argument: $arg"
-  mpirun -np 1 --map-by ppr:1:node ../build/mpi_wf $arg >> $path_results/mpi_$arg.txt
-done
-
-# Compare the output matrices
-echo "Comparing the output matrices"
-for i in $(seq 0 $((num_execution-1)))
-do
-  arg=$((start_val * (2 ** i)))
-  echo "Size $arg"
-  compare_matrices $path_results/seq_output_$arg.txt $path_results/mpi_$arg.txt "MPI"
-  echo "------------------------------------"
+  mpirun -n 4 --bind-to none ../build/mpi_wf $arg >> $path_results/mpi_$arg.txt
 done
 
 # compare the element of each matrix the output file contains only one number that must to match
@@ -56,3 +46,13 @@ compare_matrices() {
         cat $file2
     fi
 }
+
+# Compare the output matrices
+echo "Comparing the output matrices"
+for i in $(seq 0 $((num_execution-1)))
+do
+  arg=$((start_val * (2 ** i)))
+  echo "Size $arg"
+  compare_matrices $path_results/seq_output_$arg.txt $path_results/mpi_$arg.txt "MPI"
+  echo "------------------------------------"
+done

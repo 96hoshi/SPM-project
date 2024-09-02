@@ -35,7 +35,6 @@ run_programs() {
     ./sequential_wf $size > $path_results/seq_output_$size.txt
     # Run the FastFlow farm version with specified number of threads
     ./ff_farm_wf $size $num_workers > $path_results/farm_output_$size.txt
-
     # Run the MPI version with specified number of processes
     mpirun -np 4 ./mpi_wf $size > $path_results/mpi_output_$size.txt
 
@@ -62,8 +61,6 @@ compare_matrices() {
         cat $file1
         echo "Parallel output:"
         cat $file2
-
-        
     fi
 }
 
