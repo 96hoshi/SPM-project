@@ -19,8 +19,10 @@ declare -a case3_sizes=(2048 4096 8192)
 path_results="../test/results/correctness/"
 
 # Compilation
-rm -rf build
-mkdir build
+if [ -d "../build" ]; then
+    rm -rf ../build
+fi
+mkdir ../build
 cd ../build/
 cmake -DENABLE_BENCHMARK=OFF .. 
 make -j 8 
@@ -33,8 +35,10 @@ run_programs() {
     echo "#workers: $num_workers"
     # Run the sequential version and get the output save it with the size with proper name
     ./sequential_wf $size > $path_results/seq_output_$size.txt
+    # Run the FastFlow version with specified number of threads
+    ./ff_parallel_wf $size $num_workers > $path_results/parallel_output_$size.txt
     # Run the FastFlow farm version with specified number of threads
-    ./ff_farm_wf $size $num_workers > $path_results/farm_output_$size.txt
+    ./ff_farm_wf $size $num_workers 0 > $path_results/farm_output_$size.txt
     # Run the MPI version with specified number of processes
     mpirun -np 4 ./mpi_wf $size > $path_results/mpi_output_$size.txt
 

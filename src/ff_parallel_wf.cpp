@@ -2,6 +2,7 @@
 #include <vector>
 #include <cstdint>
 #include <chrono>
+#include <iomanip>
 #include <ff/ff.hpp>
 #include <ff/parallel_for.hpp>
 
@@ -21,33 +22,22 @@ void printMatrix(const std::vector<double> &M, const uint64_t &N) {
 void parallelwavefront(std::vector<double> &M, const uint64_t &N, const int nw) {
     ParallelFor pf(nw);
 
-    double result = 0.0;
-	uint64_t row_start = 0;
-	uint64_t diag_row = 0;
-    
     // For each upper diagonal
-    for (uint64_t k = 1; k < N; ++k) {
-
+    for (uint64_t d = 1; d < N; ++d) {
         // Diagonal level parallelism
-        pf.parallel_for(0, N - k, 1, 0, [&](const long m) {
-            row_start = m * N;  //index to iterate over the rows
-            diag_row = (m + k) * N;  //row of the diagonal element
-
-            result = 0.0;
-
-            for (uint64_t j = 0; j < k; ++j) {
-                // read the elements from the lower triangular part of the matrix
-                result += M[row_start + (m + j)] * M[diag_row + (m + j + 1)]; // M[m][m+j] * M[m+k][m+j+1]
+        pf.parallel_for(0, N - d, 1, [&](const long i) {
+            int j = d + i;
+            double sum = 0.0;
+            for (int k = i; k < j; ++k) {
+                sum += M[(i*N) + k] *  M[((k + 1) * N) + j];
             }
-            
-            // Store the result in the lower triangular part of the matrix
-            M[diag_row + m] = std::cbrt(result); // M[m+k][m]
-            // Copy the result to the upper triangular part of the matrix
-            M[row_start + (m + k)] = M[diag_row + m]; // M[m][m+k] = M[m+k][m]
+            sum = std::cbrt(sum);
+            M[(i * N) + j] = sum;
+            M[(j * N) + i] = sum;
         });
     }
-    	
-	// clear intermedaite results in the lower triangular part of the matrix
+     
+ // clear intermedaite results in the lower triangular part of the matrix
     for (uint64_t i = 0; i < N; ++i) {
         for (uint64_t j = 0; j < i; ++j) {
             M[i * N + j] = 0.0;
@@ -86,7 +76,8 @@ int main(int argc, char *argv[]) {
         std::cout << std::fixed << std::setprecision(6) << delta.count() << std::endl;
     #else
         parallelwavefront(M, N, nw);
-        printMatrix(M, N);
+        //printMatrix(M, N);
+        std::cout << M[N - 1] << std::endl;
     #endif
 
     return 0;

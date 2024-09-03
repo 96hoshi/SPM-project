@@ -1,13 +1,11 @@
-// compile:
-// g++ -std=c++20 -O3 -march=native -I<path-to-include> sequential.cpp -o UTW
-//
 #include <iostream>
 #include <vector>
 #include <thread>
 #include <random>
 #include <cassert>
 #include <chrono>
-		
+#include <iomanip>
+
 
 // Function to perform dot product
 double dotProduct(const std::vector<double>& v1, const std::vector<double>& v2) {
@@ -51,7 +49,6 @@ void wavefront(std::vector<double> &M, const uint64_t &N) {
 	}
 }
 #else
-//TODO: compare with the row*column product version (1.154813 upper right)
 void wavefront(std::vector<double> &M, const uint64_t &N) {
 	double result = 0.0;
 	uint64_t row_start = 0;
