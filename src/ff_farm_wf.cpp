@@ -43,8 +43,7 @@ struct Emitter: ff_monode_t<uint, Task> {
 
     Emitter(uint64_t N, int nw) : N(N), nw(nw), k(1), feedback_count(0) {
         // Same chunk size to all workers for static scheduling
-        //chunk_size = static_cast<uint64_t>(std::ceil(static_cast<double>(N) / nw));
-        chunk_size = 1;
+        chunk_size = static_cast<uint64_t>(std::ceil(static_cast<double>(N) / nw));
     }
 
     Task* svc(uint* task_size) {
@@ -57,7 +56,7 @@ struct Emitter: ff_monode_t<uint, Task> {
             feedback_count = 0;
             ++k;
         }
-        if(feedback_count == 0){
+        if (feedback_count == 0){
             // Send tasks to workers
             for (uint64_t m = 0; m < (N - k); m += chunk_size) {
                 uint chunk = std::min(chunk_size, static_cast<int>(N - k - m));
@@ -74,8 +73,8 @@ struct Emitter: ff_monode_t<uint, Task> {
 struct Worker: ff_node_t<Task, uint> {
     std::vector<double>& M;
     uint64_t N;
-    uint64_t row_start = 0;           // Row index
-    uint64_t diag_row = 0;            // Row index for the diagonal
+    uint64_t row = 0;           // Row index
+    uint64_t row_t = 0;         // Row index for the diagonal
     double result = 0.0;
 
     Worker(std::vector<double>& M, uint64_t N) : M(M), N(N) {}
@@ -88,18 +87,19 @@ struct Worker: ff_node_t<Task, uint> {
         uint64_t end = std::min(N - k, m + task_size);
 
         for (; m < end; ++m) {
-            row_start = m * N;       // index to iterate over the rows
-            diag_row = (m + k) * N;  // row of the diagonal element
-
+            row = m * N;          // index to iterate over the rows
+            row_t = (m + k) * N;  // row of the diagonal element
             result = 0.0;
+
             for (uint64_t j = 0; j < k; ++j) {
                 // read the elements from the lower triangular part of the matrix
-                result += M[row_start + (m + j)] * M[diag_row + (m + j + 1)]; // M[m][m+j] * M[m+k][m+k-j]
+                result += M[row + (m + j)] * M[row_t + (m + j + 1)]; // M[m][m+j] * M[m+k][m+k-j]
             }
+            result = std::cbrt(result);
             // Compute the cube root of the dot product and store the result in the lower triangular part of the matrix
-            M[diag_row + m] = std::cbrt(result); // M[m+k][m]
+            M[row_t + m] = result; // M[m+k][m]
             // Copy the result to the upper triangular part of the matrix
-            M[row_start + (m + k)] = M[diag_row + m]; // M[m][m+k] = M[m+k][m]
+            M[row + (m + k)] = result; // M[m][m+k] = M[m+k][m]
         }
         uint* size = new uint(task_size);
         return size;
@@ -135,7 +135,6 @@ int farm_wavefront(std::vector<double>& M, const uint64_t& N, const int nw, cons
             M[i * N + j] = 0.0;
         }
     }
-
     return 0;
 }
 

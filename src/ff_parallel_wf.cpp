@@ -19,21 +19,24 @@ void printMatrix(const std::vector<double> &M, const uint64_t &N) {
 	}
 }
 
-void parallelwavefront(std::vector<double> &M, const uint64_t &N, const int nw) {
+void parallelwavefront(std::vector<double> &M, const uint64_t &N, int nw) {
     ParallelFor pf(nw);
 
     // For each upper diagonal
     for (uint64_t d = 1; d < N; ++d) {
         // Diagonal level parallelism
         pf.parallel_for(0, N - d, 1, [&](const long i) {
-            int j = d + i;
+            uint64_t j = d + i;
             double sum = 0.0;
-            for (int k = i; k < j; ++k) {
-                sum += M[(i*N) + k] *  M[((k + 1) * N) + j];
+            uint64_t row = i * N;
+            uint64_t row_t = j * N;
+
+            for (uint64_t k = i; k < j; ++k) {
+                sum += M[row + k] *  M[(k + 1) + row_t];
             }
             sum = std::cbrt(sum);
-            M[(i * N) + j] = sum;
-            M[(j * N) + i] = sum;
+            M[row + j] = sum;
+            M[row_t + i] = sum;
         });
     }
      

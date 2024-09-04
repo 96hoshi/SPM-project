@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iomanip>
 #include <mpi.h>
+#include <omp.h>
 
 
 int main(int argc, char** argv) {
@@ -43,14 +44,11 @@ int main(int argc, char** argv) {
     // Initialize matrix in the root process
     if (rank == 0) {
         for (int i = 0; i < N; ++i) {
-            //M[i * N + i] = static_cast<double>(i + 1) / N;
             main_diag[i] = static_cast<double>(i + 1) / N;
         }
        start_time = MPI_Wtime();
     }
 
-    // TODO: use scatterv
-    // TODO: do not send the matrix but only send the corect partial diagonal to each process
     // Broadcast matrix to all processes
     MPI_Bcast(main_diag.data(), N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
@@ -69,15 +67,15 @@ int main(int argc, char** argv) {
 
         std::vector<double> local_results(end_row - start_row, 0.0);
 
-        // TODO: use omp parallel for with reduce (+)
+        #pragma omp parallel for 
         for (int m = start_row; m < end_row; ++m) {
-            int row_start = m * N;        //index to iterate over the rows
-            int diag_row = (m + k) * N;   //row of the diagonal element
+            int row = m * N;        //index to iterate over the rows
+            int row_t = (m + k) * N;   //row of the diagonal element
 
             local_results[m - start_row] = 0.0;
 
             for (int j = 0; j < k; ++j) {
-                local_results[m - start_row] += M[row_start + (m + j)] * M[diag_row + (m + j + 1)]; // M[m][m+j] * M[m+k][m+j+1]
+                local_results[m - start_row] += M[row + (m + j)] * M[row_t + (m + j + 1)]; // M[m][m+j] * M[m+k][m+j+1]
             }
             local_results[m - start_row] = std::cbrt(local_results[m - start_row]); // M[m+k][m]
         }
@@ -109,23 +107,22 @@ int main(int argc, char** argv) {
         MPI_Bcast(diag_temp.data(), N - k, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
         for (int m = 0; m < N - k; ++m) {
-            int row_start = m * N;  
-            int diag_row = (m + k) * N;
+            int row = m * N;  
+            int row_t = (m + k) * N;
 
             // Store the result in the lower triangular part of the matrix
-            M[diag_row + m] = diag_temp[m]; // M[m+k][m]
+            M[row_t + m] = diag_temp[m]; // M[m+k][m]
             // Copy the result to the upper triangular part of the matrix
-            M[row_start + (m + k)] = M[diag_row + m]; // M[m][m+k] = M[m+k][m]
+            M[row + (m + k)] = M[row_t + m]; // M[m][m+k] = M[m+k][m]
         }
     }
     
     // Print the final matrix
     if (rank == 0) {    
-        // stop timer
         double end_time = MPI_Wtime();
 
         #ifdef BENCHMARK
-            std::printf("%f\n", end_time - start_time);
+            std::cout << std::fixed << std::setprecision(6) << end_time - start_time << std::endl;
             std::cout << M[N - 1] << std::endl;
         #else
             // Clear the lower triangular matrix
@@ -134,13 +131,6 @@ int main(int argc, char** argv) {
                     M[i * N + j] = 0.0;
                 }
             }
-            // for (int i = 0; i < N; ++i) {
-            //     for (int j = 0; j < N; ++j) {
-            //         std::printf("%f ", M[i * N + j]);
-            //     }
-            //     std::printf("\n");
-            // }
-
             // correctness check: if the upper right element of the matrix is correct
             std::cout << M[N - 1] << std::endl;
         #endif

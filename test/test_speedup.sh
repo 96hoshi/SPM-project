@@ -1,4 +1,10 @@
 #!/bin/bash
+#SBATCH --job-name=ff_scaling
+#SBATCH --output=results/times/ff_scaling%_j.out
+#SBATCH --error=results/times/error_ff_scaling%_j.err 
+#SBATCH -t 00:40:00 #(hrs:min:sec)
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
 
 # Check if arguments are provided correctly
 if [ $# -lt 2 ]; then
@@ -29,11 +35,11 @@ on_demand=$2
 # Define matrix sizes for each test case 
 declare -a small_sizes=(50 56 100)
 declare -a medium_sizes=(128 256 1024)
-declare -a big_sizes=(1024 2048 4096)
-declare -a final_sizes=(128 516 1000 1001 1024 2048 4096 8192) 
+declare -a big_sizes=(100 1001 1024 2048 4096)
+declare -a final_sizes=(516 1024 2048 4000 4096 8001 8192) 
 
 # Define the number of workers to test with
-declare -a workers=(2 4 6 8)
+declare -a workers=(1 2 4 6 8 16 32)
 
 # Output file for all results
 output_file="./results/speedup.csv"
@@ -49,7 +55,7 @@ run_programs() {
     SEQ_TIME=$(../build/sequential_wf $size)
 
     # Record the sequential time in the output file
-    echo "seq,$size,1,0,$SEQ_TIME,1" >> $output_file
+    echo "seq,$size,1,0,$SEQ_TIME,1,1" >> $output_file
 
     # Iterate over the number of workers for parallel and farm versions
     for num_workers in "${workers[@]}"; do
@@ -58,18 +64,22 @@ run_programs() {
 
         # Run the parallel version with specified number of threads and save output
         PAR_TIME=$(../build/ff_parallel_wf $size $num_workers)
+        PAR_TIME_T=$(../build/ff_parallel_wf_T $size $num_workers)
 
         # Calculate the speedup
         FARM_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $FARM_TIME" | bc)
         PAR_SPEEDUP=$(echo "scale=2; $SEQ_TIME / $PAR_TIME" | bc)
+        PAR_SPEEDUP_T=$(echo "scale=2; $SEQ_TIME / $PAR_TIME_T" | bc)
 
         # Calculate the efficiency
         FARM_EFFICIENCY=$(echo "scale=2; $FARM_SPEEDUP / $num_workers" | bc)
         PAR_EFFICIENCY=$(echo "scale=2; $PAR_SPEEDUP / $num_workers" | bc)
+        PAR_EFFICIENCY_T=$(echo "scale=2; $PAR_SPEEDUP_T / $num_workers" | bc)
 
         # Append results to output file
         echo "frm,$size,$num_workers,$on_demand,$FARM_TIME,$FARM_SPEEDUP,$FARM_EFFICIENCY" >> $output_file
         echo "par,$size,$num_workers,1,$PAR_TIME,$PAR_SPEEDUP,$PAR_EFFICIENCY" >> $output_file
+        echo "prT,$size,$num_workers,1,$PAR_TIME_T,$PAR_SPEEDUP_T,$PAR_EFFICIENCY_T" >> $output_file
     done
 }
 

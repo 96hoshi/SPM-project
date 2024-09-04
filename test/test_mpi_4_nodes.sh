@@ -2,7 +2,7 @@
 #SBATCH --job-name=mpi_4_nodes
 #SBATCH --output=results/mpi/mpi_4_nodes%_j.out
 #SBATCH --error=results/mpi/error_mpi_4_nodes%_j.err 
-#SBATCH -t 00:10:00 #(hrs:min:sec)
+#SBATCH -t 00:50:00 #(hrs:min:sec)
 #SBATCH --nodes=4
 #SBATCH --ntasks-per-node=1
 
@@ -16,7 +16,7 @@ cmake -DENABLE_BENCHMARK=ON ..
 make -j 8
 
 # Number of execution of the program
-num_execution=4
+num_execution=5
 start_val=1024
 nodes=4
 
