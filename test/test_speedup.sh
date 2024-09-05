@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=ff_scaling
-#SBATCH --output=results/times/ff_scaling%_j.out
-#SBATCH --error=results/times/error_ff_scaling%_j.err 
-#SBATCH -t 00:40:00 #(hrs:min:sec)
+#SBATCH --job-name=speedup_node
+#SBATCH --output=results/remote/speedup_node%_j.out
+#SBATCH --error=results/remote/error_speedup_node%_j.err 
+#SBATCH -t 01:30:00 #(hrs:min:sec)
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 
@@ -39,13 +39,13 @@ declare -a big_sizes=(100 1001 1024 2048 4096)
 declare -a final_sizes=(516 1024 2048 4000 4096 8001 8192) 
 
 # Define the number of workers to test with
-declare -a workers=(1 2 4 6 8 16 32)
+declare -a workers=(1 2 4 6 8 16)
 
 # Output file for all results
-output_file="./results/speedup.csv"
+output_file="./results/speedup_node.csv"
 
 # Write the CSV header
-echo "method,size,#w,on-demand,time,speedup,efficiency" >> $output_file
+echo "method,size,#w,on-demand,time,speedup,efficiency" 
 
 # Function to run the programs for a given matrix size and save results to output file
 run_programs() {
@@ -55,7 +55,7 @@ run_programs() {
     SEQ_TIME=$(../build/sequential_wf $size)
 
     # Record the sequential time in the output file
-    echo "seq,$size,1,0,$SEQ_TIME,1,1" >> $output_file
+    echo "seq,$size,1,0,$SEQ_TIME,1,1" 
 
     # Iterate over the number of workers for parallel and farm versions
     for num_workers in "${workers[@]}"; do
@@ -77,9 +77,9 @@ run_programs() {
         PAR_EFFICIENCY_T=$(echo "scale=2; $PAR_SPEEDUP_T / $num_workers" | bc)
 
         # Append results to output file
-        echo "frm,$size,$num_workers,$on_demand,$FARM_TIME,$FARM_SPEEDUP,$FARM_EFFICIENCY" >> $output_file
-        echo "par,$size,$num_workers,1,$PAR_TIME,$PAR_SPEEDUP,$PAR_EFFICIENCY" >> $output_file
-        echo "prT,$size,$num_workers,1,$PAR_TIME_T,$PAR_SPEEDUP_T,$PAR_EFFICIENCY_T" >> $output_file
+        echo "frm,$size,$num_workers,$on_demand,$FARM_TIME,$FARM_SPEEDUP,$FARM_EFFICIENCY" 
+        echo "par,$size,$num_workers,1,$PAR_TIME,$PAR_SPEEDUP,$PAR_EFFICIENCY" 
+        echo "prT,$size,$num_workers,1,$PAR_TIME_T,$PAR_SPEEDUP_T,$PAR_EFFICIENCY_T" 
     done
 }
 
