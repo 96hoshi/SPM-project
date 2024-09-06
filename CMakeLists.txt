@@ -10,7 +10,7 @@ set(CMAKE_BUILD_TYPE Release)
 #set(CMAKE_BUILD_TYPE Debug)
 
 # Define options
-option(ENABLE_BENCHMARK "Enable times benchmarking" OFF)
+option(ENABLE_BENCHMARK "Enable times benchmarking" ON)
 
 # Set the flags for different build types
 set(CMAKE_CXX_FLAGS "-O3 -pg -pthread")

@@ -34,7 +34,6 @@ int main(int argc, char** argv) {
         MPI_Finalize();
         return -1;
     }
-    // TODO: add check if N is too big for a certain treshold, save the matrix in a file and read it in the root process FUTURE WORKS
 
     double start_time = 0;
     int mat_size = N * N;
@@ -49,7 +48,6 @@ int main(int argc, char** argv) {
        start_time = MPI_Wtime();
     }
 
-    // Broadcast matrix to all processes
     MPI_Bcast(main_diag.data(), N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     // use the broadcasted diagonal to update the matrix
@@ -69,7 +67,7 @@ int main(int argc, char** argv) {
 
         #pragma omp parallel for 
         for (int m = start_row; m < end_row; ++m) {
-            int row = m * N;        //index to iterate over the rows
+            int row = m * N;            //index to iterate over the rows
             int row_t = (m + k) * N;   //row of the diagonal element
 
             local_results[m - start_row] = 0.0;
