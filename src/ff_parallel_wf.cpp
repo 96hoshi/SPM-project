@@ -48,6 +48,7 @@ void parallelwavefront(std::vector<double> &M, const uint64_t &N, int nw) {
     }
 }
 
+
 int main(int argc, char *argv[]) {
     uint64_t N = 516;    // default size of the matrix (NxN)
     int nw = 4;          // default number of workers

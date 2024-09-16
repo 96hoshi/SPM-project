@@ -7,16 +7,6 @@
 #include <iomanip>
 
 
-// Function to perform dot product
-double dotProduct(const std::vector<double>& v1, const std::vector<double>& v2) {
-    double result = 0.0;
-    for(size_t i = 0; i < v1.size(); ++i) {
-        result += v1[i] * v2[i];
-    }
-	// return sqrt 3 of the result
-	return std::cbrt(result);
-}
-
 // Print the matrix
 void printMatrix(const std::vector<double> &M, const uint64_t &N) {
 	for(uint64_t m = 0; m < N; ++m) {
@@ -27,28 +17,6 @@ void printMatrix(const std::vector<double> &M, const uint64_t &N) {
 	}
 }
 
-#ifdef V0
-void wavefront(std::vector<double> &M, const uint64_t &N) {
-	std::vector<double> v_m(1), v_mk(1);
-
-	// For each upper diagonal
-    for (uint64_t k = 1; k < N; ++k) {
-        v_m.resize(k);
-        v_mk.resize(k);
-
-        // For each element in the diagonal
-        for (uint64_t m = 0; m < N - k; ++m) {
-            for (uint64_t j = 0; j < k; ++j) {
-                v_m[j] = M[m * N + (m + j)]; 			// M[i][i+j]
-				// column vector to perform the dot product
-                v_mk[k - j - 1] = M[(m + k - j) * N + (m + k)]; // M[i+k-j][i+k]
-            }
-            // Store the result in the matrix M
-            M[m * N + m + k] = dotProduct(v_m, v_mk);   // M[i][i+k]
-		}
-	}
-}
-#else
 void wavefront(std::vector<double> &M, const uint64_t &N) {
     uint64_t j = 0;
     double result = 0.0;
@@ -57,7 +25,7 @@ void wavefront(std::vector<double> &M, const uint64_t &N) {
 
 	for (uint64_t k = 1; k < N; ++k) {
 		for (uint64_t m = 0; m < N - k; ++m) {
-		row = m * N;  //index to iterate over the rows
+		row = m * N;  		  //index to iterate over the rows
 		row_t = (m + k) * N;  //row of the diagonal element
 		result = 0.0;
 
@@ -80,7 +48,6 @@ void wavefront(std::vector<double> &M, const uint64_t &N) {
         }
     }
 }
-#endif
 
 
 int main(int argc, char *argv[]) {

@@ -7,12 +7,7 @@
 #include <ff/ff.hpp>
 #include <ff/farm.hpp>
 
-#include "hpc_helpers.hpp"
-//#include "utils.hpp"
-
 using namespace ff;
-
-#define MAX_CHUNK_SIZE 128
 
 
 // Print the matrix
@@ -25,7 +20,6 @@ void printMatrix(const std::vector<double>& M, const uint64_t& N) {
     }
 }
 
-//TODO: use proper type
 struct Task {
     uint64_t k;
     uint64_t m;

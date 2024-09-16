@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=mpi_final_core
-#SBATCH --output=results/mpi/mpi_final_core_%j.out
-#SBATCH --error=results/mpi/error_mpi_final_core_%j.err 
+#SBATCH --job-name=mpi_final_none
+#SBATCH --output=results/mpi/mpi_final_none_%j.out
+#SBATCH --error=results/mpi/error_mpi_final_none_%j.err 
 #SBATCH -t 00:59:00 #(hrs:min:sec)
 #SBATCH --nodes=8
 
@@ -25,11 +25,11 @@ for size in "${sizes[@]}";
 do
   for i in "${nodes[@]}";
   do
-    MPI_TIME=$(mpirun -x OMP_NUM_THREADS=1 --bind-to core --map-by ppr:1:node -n $i ./mpi_wf $size)
+    MPI_TIME=$(mpirun -x OMP_NUM_THREADS=1 --bind-to none --map-by ppr:1:node -n $i ./mpi_wf $size)
     echo "$size,1,$i,$MPI_TIME"
-    MPI_TIME_2=$(mpirun -x OMP_NUM_THREADS=2 --bind-to core --map-by ppr:2:node -n $i ./mpi_wf $size)
+    MPI_TIME_2=$(mpirun -x OMP_NUM_THREADS=2 --bind-to none --map-by ppr:2:node -n $i ./mpi_wf $size)
     echo "$size,2,$i,$MPI_TIME_2" 
-    MPI_TIME_4=$(mpirun -x OMP_NUM_THREADS=4 --bind-to core --map-by ppr:4:node -n $i ./mpi_wf $size)
+    MPI_TIME_4=$(mpirun -x OMP_NUM_THREADS=4 --bind-to none --map-by ppr:4:node -n $i ./mpi_wf $size)
     echo "$size,4,$i,$MPI_TIME_4"
   done
 done
